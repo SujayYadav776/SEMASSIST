@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#a9afba" />
+    <meta name="description" content="A soft, modular Python, Java, and Operating Systems study dashboard" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://esm.sh https://nrxbelpmydquivcphxry.supabase.co wss://nrxbelpmydquivcphxry.supabase.co ws://localhost:* ws://127.0.0.1:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <title>SEM ASSIST — Semester Dashboard</title>
+    <style>
+      /* Reference-grounded style: a pearl-gray outer canvas, creamy yellow light, compact pill navigation, rounded modular cards, and restrained black typography. */
+      :root {
+        --canvas: #a9afba;
+        --paper: #efefec;
+        --card: rgba(255, 255, 253, 0.88);
+        --ink: #20201f;
+        --muted: #777773;
+        --line: #d9d8d1;
+        --yellow: #f6ce50;
+        --yellow-soft: #ffeb9b;
+        --yellow-wash: #fff3c7;
+        --green: #a7cd68;
+        --blue: #8da9da;
+        --coral: #e89b80;
+        --charcoal: #2d2d2b;
+        --soft-shadow: 0 25px 65px rgba(44, 48, 58, 0.24);
+        --card-shadow: 0 10px 24px rgba(56, 56, 47, 0.07);
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body { margin: 0; min-width: 320px; color: var(--ink); font-family: "DM Sans", sans-serif; background: radial-gradient(circle at 18% 10%, rgba(255,255,255,.28), transparent 27rem), linear-gradient(135deg, #a6adb9 0%, #b7bcc3 47%, #aeb5bf 100%); }
+      button, input { font: inherit; }
+      button { cursor: pointer; }
+      button:focus-visible, input:focus-visible { outline: 3px solid rgba(45,45,43,.55); outline-offset: 3px; }
+      .page { min-height: 100vh; padding: clamp(18px, 5vw, 54px); display: grid; place-items: center; }
+      .dashboard { width: min(1380px, 100%); overflow: hidden; padding: 16px; border: 1px solid rgba(255,255,255,.58); border-radius: 31px; background: radial-gradient(circle at 91% 21%, rgba(255,224,102,.52), transparent 25rem), radial-gradient(circle at 57% 80%, rgba(255,244,193,.83), transparent 32rem), var(--paper); box-shadow: var(--soft-shadow); }
+
+      .topbar { min-height: 52px; display: flex; align-items: center; gap: 14px; padding: 0 2px 15px; }
+      .brand { display: flex; align-items: center; gap: 9px; min-width: 205px; font: 800 19px/1 "Manrope", sans-serif; letter-spacing: -.07em; }
+      .brand-mark { position: relative; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: var(--ink); background: var(--yellow); font: 800 18px/1 "Manrope", sans-serif; letter-spacing: -.12em; }
+      .brand-mark::before { content: "S"; transform: translateX(-1px); }
+      .brand-mark::after { content: ""; position: absolute; right: 6px; bottom: 6px; width: 5px; height: 5px; border-radius: 50%; background: var(--ink); }
+      .main-nav { display: flex; align-items: center; justify-content: center; gap: 2px; flex: 1; min-width: 0; padding: 4px; border-radius: 15px; background: rgba(255,255,255,.54); }
+      .nav-button { border: 0; border-radius: 12px; padding: 9px 12px; color: #53534f; background: transparent; font-size: 11px; white-space: nowrap; transition: .18s var(--ease); }
+      .nav-button:hover, .nav-button.active { color: white; background: var(--charcoal); box-shadow: 0 5px 10px rgba(0,0,0,.11); }
+      .top-actions { display: flex; gap: 7px; }
+      .icon-button { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(255,255,255,.7); color: var(--ink); font-size: 15px; transition: transform .18s var(--ease), background .18s var(--ease); }
+      .icon-button:hover { transform: translateY(-2px); background: white; }
+
+      .intro { display: grid; grid-template-columns: minmax(0, 1.34fr) minmax(330px, .86fr); gap: 22px; padding: 18px 4px 20px; align-items: end; }
+      .intro h1 { margin: 0; font: 500 clamp(29px, 3.5vw, 47px)/1.03 "Manrope", sans-serif; letter-spacing: -.07em; }
+      .intro h1 em { font-style: normal; color: #555550; }
+      .intro-note { margin: 10px 0 0; max-width: 560px; color: #666660; font-size: 13px; line-height: 1.45; }
+      .headline-progress { display: grid; grid-template-columns: 74px 74px 1fr 74px; gap: 10px; margin-top: 22px; align-items: end; }
+      .progress-chip small { display: block; margin-bottom: 7px; color: #61615c; font-size: 10px; }
+      .progress-chip strong { height: 33px; display: grid; place-items: center; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--charcoal); color: white; }
+      .progress-chip.python strong { background: var(--yellow); color: var(--ink); }
+      .progress-chip.os strong { background: #eef0eb; color: var(--ink); border: 1px solid #b6b6b0; }
+      .long-progress { height: 31px; overflow: hidden; border-radius: 999px; border: 1px solid rgba(73,73,66,.14); background: repeating-linear-gradient(120deg, rgba(56,56,48,.08) 0 1px, transparent 1px 4px), rgba(255,255,255,.45); }
+      .long-progress span { display: block; height: 100%; width: 0%; border-radius: inherit; background: repeating-linear-gradient(120deg, rgba(255,255,255,.82) 0 1px, transparent 1px 4px), var(--yellow); transition: width .25s var(--ease); }
+      .intro-stats { display: flex; justify-content: flex-end; gap: clamp(12px, 3vw, 34px); padding: 8px 2px 3px; }
+      .intro-stat { display: grid; grid-template-columns: 21px auto; column-gap: 7px; align-items: center; }
+      .intro-stat .stat-icon { grid-row: 1 / 3; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 6px; background: rgba(255,255,255,.48); font-size: 11px; }
+      .intro-stat strong { font: 500 clamp(27px, 3vw, 43px)/.94 "Manrope", sans-serif; letter-spacing: -.075em; }
+      .intro-stat span { color: #5f5f59; font-size: 10px; }
+
+      .overview-grid { display: grid; grid-template-columns: 1.02fr .96fr .96fr 1.17fr; gap: 12px; }
+      .card { min-width: 0; border: 1px solid rgba(98,97,83,.09); border-radius: 22px; background: var(--card); box-shadow: var(--card-shadow); }
+      .card-title { margin: 0; font: 600 15px "Manrope", sans-serif; letter-spacing: -.045em; }
+      .card-kicker { margin: 0 0 7px; color: #777771; font-size: 10px; }
+
+      .focus-card { min-height: 228px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between; background: linear-gradient(145deg, rgba(255,255,255,.94), rgba(248,247,238,.75)); }
+      .focus-portrait { position: relative; display: grid; place-items: center; min-height: 137px; overflow: hidden; border-radius: 16px; background: radial-gradient(circle at 58% 27%, rgba(255,232,145,.85), transparent 24%), linear-gradient(135deg, #c7bead, #827e77 80%); }
+      .focus-portrait::before { content: ""; width: 86px; height: 86px; border-radius: 47% 47% 42% 42%; background: linear-gradient(110deg, #342f2c 0 31%, #b48a68 32% 66%, #3a312d 67%); box-shadow: 0 59px 0 -18px #242421, 0 82px 0 -19px #242421; transform: translateY(-8px); }
+      .focus-portrait::after { content: "TODAY"; position: absolute; right: 10px; top: 10px; padding: 6px 8px; border-radius: 999px; color: #47433c; background: rgba(255,255,255,.7); font: 700 9px "Manrope", sans-serif; letter-spacing: .1em; }
+      .focus-caption { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; margin-top: 12px; }
+      .focus-caption strong { font: 600 14px "Manrope", sans-serif; letter-spacing: -.04em; }
+      .focus-caption span { color: #7c7c74; font-size: 10px; }
+      .focus-badge { padding: 7px 9px; border-radius: 999px; background: var(--charcoal); color: white; font-size: 10px; white-space: nowrap; }
+
+      .progress-card, .timer-card { padding: 19px; min-height: 228px; }
+      .arrow-link { width: 29px; height: 29px; display: grid; place-items: center; float: right; border: 0; border-radius: 50%; background: rgba(255,255,255,.72); color: var(--ink); }
+      .progress-number { display: flex; align-items: baseline; gap: 8px; margin: 16px 0 9px; }
+      .progress-number strong { font: 500 27px/1 "Manrope", sans-serif; letter-spacing: -.07em; }
+      .progress-number span { color: #696962; font-size: 10px; }
+      .study-bars { height: 101px; display: grid; grid-template-columns: repeat(7, 1fr); align-items: end; gap: 7px; margin-top: 13px; padding: 7px 3px 0; border-bottom: 1px solid #e1e0d7; background: repeating-linear-gradient(to bottom, transparent 0 24px, rgba(52,52,48,.07) 24px 25px); }
+      .weekly-column { height: 100%; display: grid; grid-template-rows: 15px 1fr 16px; align-items: end; justify-items: center; gap: 4px; }
+      .weekly-value { min-height: 15px; color: #85837c; font: 700 9px/1 "Manrope", sans-serif; }.weekly-value.has-progress { color: var(--ink); }
+      .bar-rail { width: min(24px, 100%); height: 100%; display: flex; align-items: end; overflow: hidden; border-radius: 8px 8px 2px 2px; background: rgba(77,77,70,.09); }
+      .bar-stick { width: 100%; min-height: 4px; border-radius: 7px 7px 2px 2px; background: #9e9d94; transition: height .25s var(--ease), background .25s var(--ease); }.weekly-column.today .bar-stick { background: var(--yellow); }.weekly-column.has-progress:not(.today) .bar-stick { background: var(--charcoal); }
+      .bar-label { color: #8a8982; font: 700 9px/1 "Manrope", sans-serif; }.weekly-column.today .bar-label { color: var(--ink); }
+      .weekly-note { margin: 10px 0 0; color: #77766f; font-size: 10px; }
+      .timer-wrap { display: grid; place-items: center; margin: 15px auto 7px; }
+      .timer-ring { --ring-progress: 0%; width: 118px; height: 118px; position: relative; display: grid; place-items: center; border-radius: 50%; background: conic-gradient(var(--yellow) var(--ring-progress), #e3e1d6 0); transform: rotate(-25deg); }
+      .timer-ring::before { content: ""; position: absolute; inset: 13px; border-radius: inherit; background: #fffef9; }
+      .timer-content { position: relative; z-index: 1; transform: rotate(25deg); text-align: center; }
+      .timer-content strong { display: block; font: 500 25px/1 "Manrope", sans-serif; letter-spacing: -.075em; }
+      .timer-content span { color: #7e7d76; font-size: 9px; }
+      .timer-controls { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; }
+      .circle-control { width: 29px; height: 29px; border: 0; border-radius: 50%; background: rgba(255,255,255,.7); color: var(--ink); }
+      .circle-control.dark { color: white; background: var(--charcoal); }
+
+      .mission-card { min-height: 228px; padding: 19px; display: flex; flex-direction: column; background: linear-gradient(160deg, rgba(255,255,255,.94), rgba(255,249,218,.7)); }
+      .mission-top { display: flex; justify-content: space-between; gap: 10px; }
+      .mission-top strong { font: 500 28px/1 "Manrope", sans-serif; letter-spacing: -.08em; }
+      .segment-track { display: grid; grid-template-columns: 1.8fr 1fr .7fr; gap: 4px; margin: 19px 0 12px; }
+      .segment { height: 30px; border-radius: 10px; background: #bab9b0; } .segment:first-child { background: var(--yellow); } .segment:nth-child(2) { background: var(--charcoal); }
+      .task-device { display: grid; gap: 10px; min-height: 116px; padding: 14px; border-radius: 17px; color: white; background: var(--charcoal); box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+      .task-device-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; } .task-device-head strong { font: 500 16px "Manrope", sans-serif; letter-spacing: -.05em; }
+      .mini-task { display: flex; align-items: center; gap: 8px; color: #c7c7c1; font-size: 10px; }
+      .mini-task i { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,.13); font-style: normal; font-size: 8px; } .mini-task.done { color: white; } .mini-task.done i { color: var(--ink); background: var(--yellow); }
+
+      .lower-grid { display: grid; grid-template-columns: minmax(0, 1.93fr) minmax(250px, .86fr); gap: 12px; margin-top: 12px; }
+      .calendar-card { min-height: 213px; padding: 19px; }
+      .calendar-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+      .calendar-head h2 { margin: 0; font: 600 16px "Manrope", sans-serif; letter-spacing: -.05em; }
+      .calendar-head p { margin: 4px 0 0; color: #777771; font-size: 10px; }
+      .calendar-summary { padding: 7px 9px; border-radius: 999px; background: #f1f0ea; color: #686861; font-size: 10px; }
+      .activity-frame { overflow-x: auto; margin-top: 18px; padding: 7px 0 10px; }
+      .activity-calendar { display: grid; grid-template-rows: repeat(7, 12px); grid-auto-flow: column; grid-auto-columns: 12px; gap: 4px; min-width: 820px; width: max-content; }
+      .activity-dot { width: 12px; height: 12px; border-radius: 3px; background: #ebebe4; transition: transform .16s var(--ease), background .16s var(--ease); }
+      .activity-dot:hover { transform: scale(1.35); outline: 1px solid var(--ink); outline-offset: 2px; }
+      .activity-dot.level-1 { background: #ead98c; }.activity-dot.level-2 { background: #e8bf55; }.activity-dot.level-3 { background: #d99a3a; }.activity-dot.level-4 { background: var(--charcoal); }
+      .calendar-foot { display: flex; justify-content: space-between; color: #888880; font-size: 10px; }
+      .legend { display: flex; gap: 5px; align-items: center; }.legend .activity-dot { width: 9px; height: 9px; }
+      .track-summary { padding: 19px; }
+      .track-summary h2 { margin: 0; font: 600 16px "Manrope", sans-serif; letter-spacing: -.05em; }
+      .track-list { display: grid; gap: 9px; margin-top: 13px; }
+      .track-row { display: grid; grid-template-columns: 13px 1fr auto; align-items: center; gap: 8px; color: #585852; font-size: 11px; }
+      .track-row i { width: 9px; height: 9px; border-radius: 50%; background: var(--track); }.track-row strong { color: var(--ink); font: 600 11px "Manrope", sans-serif; }
+      .track-row .mini-line { grid-column: 2 / 4; height: 5px; overflow: hidden; border-radius: 999px; background: #e6e5de; }.track-row .mini-line span { display: block; width: 0%; height: 100%; background: var(--track); transition: width .25s var(--ease); }
+
+      .workbench { margin-top: 12px; padding: 18px; }
+      .workbench-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+      .workbench-title { display: flex; align-items: baseline; gap: 10px; } .workbench-title h2 { margin: 0; font: 600 19px "Manrope", sans-serif; letter-spacing: -.06em; }.workbench-title span { color: #7c7b73; font-size: 10px; }
+      .workbench-controls { display: flex; flex-wrap: wrap; gap: 6px; }
+      .filter { border: 0; padding: 8px 10px; border-radius: 999px; background: #f0efea; color: #6e6d66; font-size: 10px; transition: .16s var(--ease); }.filter.active, .filter:hover { background: var(--charcoal); color: white; }
+      .search { width: 162px; padding: 8px 11px; border: 1px solid #deddd6; border-radius: 999px; color: var(--ink); background: white; font-size: 10px; }.search::placeholder { color: #a4a39b; }
+      .checkpoints { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 10px; margin-top: 16px; }
+      .track-card { --track: var(--yellow); overflow: hidden; border: 1px solid #e4e2da; border-radius: 17px; background: rgba(255,255,255,.7); }
+      .track-card.wide { grid-column: 1 / -1; }
+      .track-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 13px 14px; border-bottom: 1px solid #e7e5dd; background: linear-gradient(90deg, color-mix(in srgb, var(--track) 20%, white), rgba(255,255,255,.55)); }
+      .track-name { display: flex; align-items: center; gap: 8px; min-width: 0; }.track-name i { width: 9px; height: 30px; border-radius: 999px; background: var(--track); }.track-name h3 { margin: 0; font: 600 14px "Manrope", sans-serif; letter-spacing: -.05em; }.track-name p { margin: 2px 0 0; color: #77766f; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }.source-link { color: #55554f; font-size: 9px; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+      .track-progress { display: flex; align-items: center; gap: 7px; font: 600 11px "Manrope", sans-serif; }.mini-orbit { --progress: 0%; width: 23px; height: 23px; border-radius: 50%; background: conic-gradient(var(--track) var(--progress), #dad9d1 0); mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 0); }
+      .task-list { display: grid; padding: 4px 12px 10px; }.task-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 9px 1px; border-bottom: 1px dotted #dddcd4; cursor: pointer; }.task-row:last-child { border-bottom: 0; }.task-row.hidden { display: none; }.task-row.done .task-text { color: #a09f97; text-decoration: line-through; }.task-row:hover .task-text { color: #111; }
+      .check { appearance: none; width: 17px; height: 17px; margin: 0; display: grid; place-content: center; border: 1px solid #bbb9af; border-radius: 50%; background: #fff; transition: .14s var(--ease); }.check::after { content: "✓"; transform: scale(0); color: var(--ink); font: 800 10px/1 Arial; transition: .14s var(--ease); }.check:checked { background: var(--yellow); border-color: var(--yellow); }.check:checked::after { transform: scale(1); }
+      .task-text { color: #4b4b46; font-size: 11px; line-height: 1.32; }.task-meta { color: #99978e; font: 700 8px "Manrope", sans-serif; letter-spacing: .08em; }.empty-state { display: none; padding: 30px; color: #76756e; text-align: center; font-size: 12px; }.empty-state.show { display: block; }
+
+      .custom-card { margin-top: 12px; padding: 18px; background: linear-gradient(145deg, rgba(255,255,255,.92), rgba(255,247,210,.72)); }.custom-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; }.custom-head h2 { margin: 0; font: 600 19px "Manrope", sans-serif; letter-spacing: -.06em; }.custom-head p { max-width: 430px; margin: 4px 0 0; color: #77766f; font-size: 10px; line-height: 1.4; }.custom-count { padding: 8px 10px; border-radius: 999px; background: rgba(255,255,255,.7); color: #66655e; font-size: 10px; white-space: nowrap; }.custom-form { display: grid; grid-template-columns: minmax(0, 1fr) 145px auto; align-items: end; gap: 8px; margin-top: 16px; }.custom-field { display: grid; gap: 6px; color: #77766f; font-size: 9px; }.custom-field input, .custom-field select { width: 100%; min-height: 36px; padding: 9px 11px; border: 1px solid #dddcd4; border-radius: 12px; color: var(--ink); background: rgba(255,255,255,.88); font-size: 11px; }.custom-field input::placeholder { color: #a3a29b; }.add-button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 12px; color: var(--ink); background: var(--yellow); font-size: 11px; font-weight: 700; transition: transform .16s var(--ease), box-shadow .16s var(--ease); }.add-button:hover { transform: translateY(-2px); box-shadow: 0 7px 14px rgba(186,144,36,.22); }.custom-meta { display: flex; justify-content: space-between; margin-top: 14px; padding-top: 11px; border-top: 1px dotted #d8d6cc; color: #86857c; font-size: 10px; }.custom-list { display: grid; gap: 7px; margin-top: 9px; }.custom-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 11px; border: 1px solid #e5e3da; border-radius: 13px; background: rgba(255,255,255,.62); }.custom-main { display: flex; align-items: center; gap: 9px; min-width: 0; cursor: pointer; }.custom-main span { min-width: 0; color: #4b4b46; font-size: 11px; line-height: 1.3; }.custom-main small { display: block; margin-top: 2px; color: #99978e; font-size: 9px; }.custom-row.done .custom-main span { color: #aaa89f; text-decoration: line-through; }.custom-delete { width: 24px; height: 24px; flex: 0 0 auto; border: 0; border-radius: 50%; color: #929087; background: transparent; font-size: 17px; line-height: 1; }.custom-delete:hover { color: #b54d3f; background: #fff0eb; }.custom-empty { margin-top: 10px; padding: 11px; border: 1px dashed #d5d3ca; border-radius: 13px; color: #8b8980; font-size: 10px; text-align: center; }.custom-empty[hidden] { display: none; }
+      .resource-card { margin-top: 12px; padding: 18px; }.resource-form { grid-template-columns: minmax(0, .8fr) minmax(0, 1.1fr) minmax(0, 1.25fr) auto; }.resource-list { position: relative; min-height: 430px; margin-top: 14px; overflow: auto; border: 1px solid #e1dfd5; border-radius: 17px; background-color: rgba(255,255,255,.36); background-image: radial-gradient(circle, rgba(64,63,57,.16) 1px, transparent 1.2px); background-size: 18px 18px; }.resource-item { position: absolute; width: min(220px, calc(100% - 24px)); display: flex; min-width: 0; justify-content: space-between; gap: 9px; padding: 12px; border: 1px solid #e5e3da; border-radius: 14px; background: rgba(255,255,253,.94); box-shadow: 0 9px 18px rgba(64,63,57,.09); cursor: grab; touch-action: none; }.resource-item.dragging { cursor: grabbing; box-shadow: 0 15px 26px rgba(64,63,57,.18); z-index: 2; }.resource-item h3 { margin: 0; font: 700 12px/1.25 "Manrope", sans-serif; letter-spacing: -.03em; }.resource-item p { margin: 4px 0 0; color: #77766f; font-size: 10px; line-height: 1.35; }.resource-item a { display: inline-block; margin-top: 7px; color: #4d4c46; font-size: 10px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }.resource-empty { position: absolute; inset: 50% 14px auto; transform: translateY(-50%); }.resource-empty[hidden] { display: none; }
+      .resource-item { border-left: 4px solid; }
+      .color-input { width: 48px; height: 40px; border: 1px solid #dddcd4; border-radius: 12px; cursor: pointer; padding: 2px; }
+      .footer-row { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-top: 15px; color: #7e7d75; font-size: 10px; }.data-actions { display: flex; gap: 6px; }.mini-button { border: 1px solid #d8d7d0; border-radius: 999px; padding: 8px 10px; color: #56554e; background: rgba(255,255,255,.62); font-size: 10px; }.mini-button:hover { background: white; }.mini-button.danger:hover { color: #b54d3f; border-color: #b54d3f; }
+      .toast { position: fixed; z-index: 20; left: 50%; bottom: 24px; transform: translate(-50%, 18px); opacity: 0; padding: 10px 14px; border-radius: 999px; color: white; background: var(--charcoal); font-size: 11px; box-shadow: 0 10px 24px rgba(0,0,0,.2); pointer-events: none; transition: .2s var(--ease); }.toast.show { opacity: 1; transform: translate(-50%,0); }
+      .auth-screen { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 20px; background: radial-gradient(circle at 20% 15%, rgba(255,232,145,.48), transparent 24rem), var(--canvas); }.auth-card { width: min(410px, 100%); padding: 28px; border: 1px solid rgba(255,255,255,.7); border-radius: 24px; background: rgba(255,255,253,.92); box-shadow: var(--soft-shadow); }.auth-brand { display: flex; align-items: center; gap: 10px; font: 800 18px/1 "Manrope", sans-serif; letter-spacing: -.06em; }.auth-card h1 { margin: 25px 0 7px; font: 700 27px/1 "Manrope", sans-serif; letter-spacing: -.06em; }.auth-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }.auth-form { display: grid; gap: 11px; margin-top: 21px; }.auth-form label { display: grid; gap: 5px; color: #65645e; font-size: 10px; font-weight: 700; }.auth-form input { min-height: 42px; padding: 10px 12px; border: 1px solid #dddcd4; border-radius: 11px; color: var(--ink); background: white; }.auth-submit { min-height: 42px; margin-top: 4px; border: 0; border-radius: 11px; color: var(--ink); background: var(--yellow); font-weight: 800; }.auth-switch { width: max-content; padding: 0; border: 0; color: #4f4e48; background: transparent; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }.auth-message { min-height: 18px; margin-top: 13px !important; color: #7b5b17 !important; }.auth-screen[hidden] { display: none; }.signed-in { position: fixed; z-index: 10; right: 18px; bottom: 18px; display: flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid #deddd6; border-radius: 999px; color: #65645e; background: rgba(255,255,253,.92); box-shadow: var(--card-shadow); font-size: 10px; }.signed-in button { padding: 0; border: 0; color: var(--ink); background: transparent; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+
+      .dashboard[hidden] { display: none; }
+
+      @media (max-width: 1080px) { .overview-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }.lower-grid { grid-template-columns: 1fr; }.intro { grid-template-columns: 1fr; }.intro-stats { justify-content: flex-start; }.brand { min-width: auto; }.main-nav { overflow-x: auto; justify-content: flex-start; }.topbar { align-items: flex-start; flex-wrap: wrap; }.main-nav { order: 3; flex-basis: 100%; }.track-summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }.track-list { display: contents; }.track-row { grid-template-columns: 9px 1fr; }.track-row strong { font-size: 10px; }.track-row .mini-line { grid-column: 1 / -1; } }
+      @media (max-width: 680px) { .page { padding: 0; }.dashboard { border-radius: 0; min-height: 100vh; padding: 12px; }.topbar { gap: 10px; }.brand { font-size: 17px; }.top-actions { margin-left: auto; }.main-nav { gap: 0; }.nav-button { padding: 8px 10px; font-size: 10px; }.intro { padding-top: 13px; gap: 12px; }.intro h1 { font-size: 31px; }.headline-progress { grid-template-columns: 64px 64px 1fr; gap: 6px; }.headline-progress .os { display: none; }.intro-stats { justify-content: space-between; gap: 9px; }.intro-stat strong { font-size: 28px; }.overview-grid { grid-template-columns: 1fr; }.focus-card, .progress-card, .timer-card, .mission-card { min-height: auto; }.lower-grid { margin-top: 10px; }.track-summary { grid-template-columns: 1fr 1fr; }.checkpoints { grid-template-columns: 1fr; }.track-card.wide { grid-column: auto; }.workbench, .custom-card, .resource-card { padding: 14px; }.workbench-top, .custom-head { align-items: flex-start; }.search { width: 130px; }.calendar-head { align-items: flex-start; flex-direction: column; }.calendar-summary { text-align: left; }.custom-form, .resource-form { grid-template-columns: 1fr 1fr; }.custom-field:first-child, .resource-form .custom-field:first-child { grid-column: 1 / -1; }.resource-form .custom-field:nth-child(2) { grid-column: 1 / -1; }.add-button { width: 100%; }.resource-list { min-height: 500px; }.resource-item { width: min(210px, calc(100% - 20px)); }.footer-row { align-items: flex-start; flex-direction: column; }.task-meta { display: none; } }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+    </style>
+  </head>
+  <body>
+    <section class="auth-screen" id="authScreen" aria-labelledby="authTitle">
+      <div class="auth-card">
+        <div class="auth-brand"><span class="brand-mark" aria-hidden="true"></span><span>SEM ASSIST</span></div>
+        <h1 id="authTitle">Welcome back</h1>
+        <p id="authDescription">Sign in to keep your study progress private and available on every device.</p>
+        <form class="auth-form" id="authForm">
+          <label>Email<input id="authEmail" type="email" autocomplete="email" required /></label>
+          <label>Password<input id="authPassword" type="password" autocomplete="current-password" minlength="6" required /></label>
+          <button class="auth-submit" id="authSubmit" type="submit">Sign in</button>
+          <button class="auth-switch" id="authSwitch" type="button">Need an account? Sign up</button>
+        </form>
+        <p class="auth-message" id="authMessage" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+    <aside class="signed-in" id="signedIn" hidden><span id="signedInEmail"></span><button id="signOut" type="button">Sign out</button></aside>
+    <div class="page"><main class="dashboard">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>SEM ASSIST</span></div>
+        <nav class="main-nav" aria-label="Dashboard routes">
+          <button class="nav-button active" data-scroll="overview">Dashboard</button><button class="nav-button" data-scroll="python">Python</button><button class="nav-button" data-scroll="java">Java</button><button class="nav-button" data-scroll="os">OS / Linux</button><button class="nav-button" data-scroll="campusops">CampusOps</button><button class="nav-button" data-scroll="resources">Resources</button><button class="nav-button" data-scroll="custom">Custom</button>
+        </nav>
+        <div class="top-actions"><button class="icon-button" id="showOpen" title="Show open tasks">◌</button><button class="icon-button" title="Local progress storage">⌁</button></div>
+      </header>
+
+      <section class="intro" id="overview">
+        <div><h1>Welcome in, <em>Sujay.</em></h1><p class="intro-note">A calm workspace for turning roadmap checkpoints into visible evidence. This week, Python and Java lead; Operating Systems keeps the foundations honest.</p>
+          <div class="headline-progress"><div class="progress-chip python"><small>Python</small><strong data-head-percent="python">0%</strong></div><div class="progress-chip"><small>Java</small><strong data-head-percent="java">0%</strong></div><div class="long-progress"><span id="headlineProgress"></span></div><div class="progress-chip os"><small>Verified</small><strong id="headVerified">0%</strong></div></div>
+        </div>
+        <div class="intro-stats"><div class="intro-stat"><span class="stat-icon">◷</span><strong id="statOpen">46</strong><span>Open steps</span></div><div class="intro-stat"><span class="stat-icon">◉</span><strong id="statStreak">0</strong><span>Day streak</span></div><div class="intro-stat"><span class="stat-icon">✦</span><strong id="statProof">0</strong><span>Proof points</span></div></div>
+      </section>
+
+      <section class="overview-grid">
+        <article class="card focus-card"><div class="focus-portrait" aria-label="Current study focus illustration"></div><div class="focus-caption"><div><strong>Python foundations</strong><span>Basics → quality → concurrency</span></div><span class="focus-badge" id="focusCount">0 / 12</span></div></article>
+        <article class="card progress-card"><button class="arrow-link" data-scroll="workbench" title="Open mission checklist">↗</button><p class="card-kicker">Progress</p><h2 class="card-title">Weekly rhythm</h2><div class="progress-number"><strong id="weeklyHours">0</strong><span>checkpoints completed<br />this week</span></div><div class="study-bars" id="studyBars" aria-label="Completed checkpoints by day this week"></div><p class="weekly-note" id="weeklyNote">Your week is ready for its first checkpoint.</p></article>
+        <article class="card timer-card"><button class="arrow-link" data-scroll="activity" title="View activity calendar">↗</button><p class="card-kicker">Time tracker</p><h2 class="card-title">Deep work pulse</h2><div class="timer-wrap"><div class="timer-ring" id="timerRing"><div class="timer-content"><strong id="timerText">00:00</strong><span>Focus time</span></div></div></div><div class="timer-controls"><button class="circle-control" id="timerStart">▷</button><button class="circle-control" id="timerPause">Ⅱ</button><button class="circle-control dark" id="timerReset">↻</button></div></article>
+        <article class="card mission-card"><div class="mission-top"><div><p class="card-kicker">Roadmap mission</p><h2 class="card-title">Checkpoint queue</h2></div><strong id="missionPercent">0%</strong></div><div class="segment-track"><span class="segment"></span><span class="segment"></span><span class="segment"></span></div><div class="task-device"><div class="task-device-head"><span>Today’s log</span><strong id="deviceProgress">0 / 46</strong></div><div class="mini-task done"><i>✓</i><span>Pick a focused checkpoint</span></div><div class="mini-task"><i>2</i><span>Finish one evidence item</span></div><div class="mini-task"><i>3</i><span>Write the next action</span></div></div></article>
+      </section>
+
+      <section class="lower-grid" id="activity">
+        <article class="card calendar-card"><div class="calendar-head"><div><h2>Activity calendar</h2><p>Every completion strengthens the record.</p></div><span class="calendar-summary" id="calendarSummary">No activity recorded yet.</span></div><div class="activity-frame"><div class="activity-calendar" id="activityCalendar" aria-label="Last 52 weeks of task completion"></div></div><div class="calendar-foot"><span>Last 52 weeks</span><span class="legend">Less <i class="activity-dot"></i><i class="activity-dot level-1"></i><i class="activity-dot level-2"></i><i class="activity-dot level-3"></i><i class="activity-dot level-4"></i> More</span></div></article>
+        <aside class="card track-summary"><h2>Roadmap pulse</h2><div class="track-list" id="trackSummary"></div></aside>
+      </section>
+
+      <section class="card custom-card" id="custom"><div class="custom-head"><div><h2>Personal tasks</h2><p>Add the extra thing that matters today or this week. It will join your progress totals and activity calendar.</p></div><span class="custom-count" id="customTaskCount">0 open · 0 total</span></div><form class="custom-form" id="customForm"><label class="custom-field"><span>Task</span><input id="customTaskInput" type="text" maxlength="140" placeholder="e.g. Review Java interfaces with notes" required /></label><label class="custom-field"><span>Cadence</span><select id="customCadence"><option value="today">Today</option><option value="week">This week</option></select></label><button class="add-button" type="submit">+ Add task</button></form><div class="custom-meta"><span>Stored locally in this browser</span><span>Check off to log activity</span></div><div class="custom-list" id="customTasks"></div><div class="custom-empty" id="customEmpty">No personal tasks yet. Add one small, concrete action.</div></section>
+
+      <section class="card workbench" id="workbench"><div class="workbench-top"><div class="workbench-title"><h2>Study checkpoints</h2><span id="workbenchCount">0 completed</span></div><div class="workbench-controls"><button class="filter active" data-filter="all">All</button><button class="filter" data-filter="open">Open</button><button class="filter" data-filter="done">Done</button><input class="search" id="search" type="search" placeholder="Find a checkpoint" /></div></div><div class="checkpoints" id="checkpoints"></div><div class="empty-state" id="emptyState">No checkpoints match this view. Try another filter or search phrase.</div><div class="footer-row"><span>Progress is saved in this browser. Export a copy before switching devices.</span><div class="data-actions"><button class="mini-button" id="exportData">Export progress</button><button class="mini-button danger" id="resetData">Reset safely</button></div></div></section>
+
+      <section class="card resource-card" id="resources"><div class="custom-head"><div><h2>Resource canvas</h2><p>Save a course, repository, article, app, or video, then drag its card to organize your learning map.</p></div><span class="custom-count" id="resourceCount">0 saved</span></div><form class="custom-form resource-form" id="resourceForm"><label class="custom-field"><span>Name</span><input id="resourceName" type="text" maxlength="80" placeholder="e.g. 30 Days of Python" required /></label><label class="custom-field"><span>Link</span><input id="resourceUrl" type="url" maxlength="500" placeholder="https://github.com/..." required /></label><label class="custom-field"><span>Short note</span><input id="resourceDescription" type="text" maxlength="160" placeholder="What will this help you learn?" /></label><label class="custom-field"><span>Color</span><input id="resourceColor" type="color" value="#f6ce50" class="color-input" title="Choose a color for this resource" /></label><button class="add-button" type="submit">+ Save resource</button></form><div class="resource-list" id="resourceList"><div class="custom-empty resource-empty" id="resourceEmpty">No resources saved yet. Add the next useful link you find.</div></div></section>
+    </main></div>
+    <div class="toast" id="toast" role="status" aria-live="polite">Progress saved locally.</div>
+    <script src="./supabase-config.js"></script>
+    <script type="module" src="./study-dashboard-boot.js"></script>
+  </body>
+</html>
