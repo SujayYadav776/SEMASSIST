@@ -117,3 +117,5 @@ client/public/__manus__/version.json
 
 # Manus dev-tooling runtime
 client/public/__manus__/
+
+.vercel
