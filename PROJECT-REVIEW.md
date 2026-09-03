@@ -176,9 +176,12 @@ real production code.
   `VITE_OAUTH_PORTAL_URL`, `VITE_APP_ID`.
 - Add a README for end users: local dev, Supabase setup steps, deployment (the setup instructions
   currently live only in agent-oriented `continue.md`).
-- Clean the Manus-specific tooling from `vite.config.ts` (`vite-plugin-manus-runtime`,
-  `vitePluginManusDebugCollector`, `vitePluginStorageProxy`) or gate it behind an env flag — the
-  debug collector writes browser logs to disk and the storage proxy uses Forge API credentials.
+- ~~Clean the Manus-specific tooling from `vite.config.ts` (`vite-plugin-manus-runtime`,
+  `vitePluginManusDebugCollector`, `vitePluginStorageProxy`) or gate it behind an env flag~~ —
+  **DONE**: all three are now gated to non-production mode (`process.env.NODE_ENV !== "production"`),
+  so the ~367 KB injected runtime no longer ships in production builds (verified: built
+  `index.html` dropped from 367.53 kB to 0.64 kB, zero manus references). Dev server behavior is
+  unchanged.
 - Fix the wouter patch (pollutes `window.__WOUTER_ROUTES__`) or drop the patched dependency.
 - Home.tsx: replace the `dangerouslySetInnerHTML` redirect with a proper `useEffect`
   `window.location.replace(...)`.

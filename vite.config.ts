@@ -203,7 +203,18 @@ function vitePluginStorageProxy(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy()];
+// Manus dev-tooling plugins (runtime injection, debug log collection, storage
+// proxy) are only needed in local development. Keep them out of production
+// builds so the ~367 KB injected runtime never ships to production users.
+const plugins = [react(), tailwindcss(), jsxLocPlugin()];
+
+if (process.env.NODE_ENV !== "production") {
+  plugins.push(
+    vitePluginManusRuntime(),
+    vitePluginManusDebugCollector(),
+    vitePluginStorageProxy()
+  );
+}
 
 export default defineConfig({
   plugins,
