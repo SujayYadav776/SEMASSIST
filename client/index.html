@@ -10,10 +10,11 @@
       window.location.replace("study-dashboard.html");
     </script>
   </head>
-  <body>
-    <main style="font-family: system-ui, sans-serif; padding: 2rem">
-      <p>Loading the SEM ASSIST study dashboard…</p>
-      <p><a href="study-dashboard.html">Open it directly</a></p>
-    </main>
-  </body>
+  <!--
+    Redirect shell: keep the body EMPTY so nothing visible flashes
+    while the dashboard page loads. The meta refresh + JS replace do
+    the redirect; the dashboard URL ends at /study-dashboard.html,
+    which matches the Supabase auth redirectUrl.
+  -->
+  <body></body>
 </html>
