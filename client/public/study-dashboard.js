@@ -3,6 +3,8 @@
 const STORAGE_KEY = "aster-study-dashboard-v3";
 const LEGACY_KEY = "mission-cs-study-dashboard-v1";
 const COOKIE_CONSENT_KEY = "semassist-cookie-consent";
+const RESOURCE_SNAP_KEY = "semassist-resource-snap";
+const RESOURCE_SNAP = 18;
 const WEEKDAY_NAMES = [
   "Monday",
   "Tuesday",
@@ -510,16 +512,34 @@ function initCookieBanner() {
   if (!banner) return;
   if (localStorage.getItem(COOKIE_CONSENT_KEY)) return;
   banner.hidden = false;
+  const accept = document.getElementById("cookieAccept");
+  const decline = document.getElementById("cookieDecline");
+  // Remember where focus was so it can be returned once the banner closes;
+  // the banner sits at the end of the DOM, so without this a keyboard user
+  // is dropped at the page's start.
+  const previouslyFocused =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
   const setConsent = value => {
     try {
       localStorage.setItem(COOKIE_CONSENT_KEY, value);
     } catch {}
     banner.hidden = true;
+    if (previouslyFocused && previouslyFocused !== document.body) {
+      previouslyFocused.focus();
+    } else {
+      // Focus was on the page itself (normal first-visit boot): blurring the
+      // banner's button hands focus back to the page. (body.focus() would be
+      // equivalent in browsers but is a no-op in jsdom when a child is focused.)
+      document.activeElement?.blur();
+    }
   };
-  const accept = document.getElementById("cookieAccept");
-  const decline = document.getElementById("cookieDecline");
   accept?.addEventListener("click", () => setConsent("accepted"));
   decline?.addEventListener("click", () => setConsent("declined"));
+  // Move focus into the banner so keyboard and screen-reader users meet it
+  // immediately instead of tabbing through the whole dashboard first.
+  accept?.focus();
 }
 function getStats(state) {
   let total = 0,
@@ -712,6 +732,44 @@ function validResourceUrl(value) {
 function safeColor(value) {
   return /^#[0-9a-fA-F]{6}$/.test(value || "") ? value : "#f6ce50";
 }
+function clampToCanvas(list, item, left, top) {
+  const maxLeft = list.clientWidth - item.offsetWidth - 10;
+  const maxTop = list.clientHeight - item.offsetHeight - 10;
+  return {
+    left: Math.max(10, Math.min(maxLeft, left)),
+    top: Math.max(10, Math.min(maxTop, top)),
+  };
+}
+function resourceSnapEnabled() {
+  return localStorage.getItem(RESOURCE_SNAP_KEY) === "on";
+}
+function snapToGrid(value) {
+  return Math.round(value / RESOURCE_SNAP) * RESOURCE_SNAP;
+}
+// Clamp to the canvas, then (when the snap toggle is on) round onto the same
+// 18px grid the canvas dots use, re-clamping in case the snapped value pokes
+// past an edge.
+function settlePosition(list, item, left, top) {
+  const clamped = clampToCanvas(list, item, left, top);
+  if (!resourceSnapEnabled()) return clamped;
+  return clampToCanvas(
+    list,
+    item,
+    snapToGrid(clamped.left),
+    snapToGrid(clamped.top)
+  );
+}
+function persistResourcePosition(item) {
+  const current = loadState();
+  const resource = current.resources.find(
+    entry => entry.id === item.dataset.resourceId
+  );
+  if (resource) {
+    resource.x = parseFloat(item.style.left) || item.offsetLeft;
+    resource.y = parseFloat(item.style.top) || item.offsetTop;
+    saveState(current);
+  }
+}
 function renderResources(state) {
   const list = document.getElementById("resourceList");
   const resources = Array.isArray(state.resources) ? state.resources : [];
@@ -736,7 +794,7 @@ function renderResources(state) {
             ? `<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">Open resource ↗</a>`
             : "<p>Link unavailable</p>";
           return (
-            `<article class="resource-item" data-resource-id="${escapedId}" style="left:${x}px;top:${y}px;border-left-color:${safeColor(resource.color)}">` +
+            `<article class="resource-item" tabindex="0" data-resource-id="${escapedId}" style="left:${x}px;top:${y}px;border-left-color:${safeColor(resource.color)}" title="Move with the arrow keys; press Enter to save the position.">` +
             `<div><h3>${name}</h3>${descriptionHtml}${linkHtml}</div>` +
             `<button class="custom-delete" type="button" aria-label="Delete ${name}" title="Delete resource" data-resource-delete="${escapedId}">×</button>` +
             `</article>`
@@ -754,39 +812,24 @@ function renderResources(state) {
   list.querySelectorAll(".resource-item").forEach(item =>
     item.addEventListener("pointerdown", event => {
       if (event.target.closest("a, button")) return;
-      const id = item.dataset.resourceId;
       const rect = list.getBoundingClientRect();
       const startX = event.clientX - item.offsetLeft;
       const startY = event.clientY - item.offsetTop;
       item.setPointerCapture(event.pointerId);
       item.classList.add("dragging");
       const move = moveEvent => {
-        const left = Math.max(
-          10,
-          Math.min(
-            list.clientWidth - item.offsetWidth - 10,
-            moveEvent.clientX - rect.left - startX
-          )
+        const pos = settlePosition(
+          list,
+          item,
+          moveEvent.clientX - rect.left - startX,
+          moveEvent.clientY - rect.top - startY
         );
-        const top = Math.max(
-          10,
-          Math.min(
-            list.clientHeight - item.offsetHeight - 10,
-            moveEvent.clientY - rect.top - startY
-          )
-        );
-        item.style.left = `${left}px`;
-        item.style.top = `${top}px`;
+        item.style.left = `${pos.left}px`;
+        item.style.top = `${pos.top}px`;
       };
       const end = () => {
         item.classList.remove("dragging");
-        const current = loadState();
-        const resource = current.resources.find(entry => entry.id === id);
-        if (resource) {
-          resource.x = item.offsetLeft;
-          resource.y = item.offsetTop;
-          saveState(current);
-        }
+        persistResourcePosition(item);
         item.removeEventListener("pointermove", move);
         item.removeEventListener("pointerup", end);
         item.removeEventListener("pointercancel", end);
@@ -794,6 +837,35 @@ function renderResources(state) {
       item.addEventListener("pointermove", move);
       item.addEventListener("pointerup", end);
       item.addEventListener("pointercancel", end);
+    })
+  );
+  list.querySelectorAll(".resource-item").forEach(item =>
+    item.addEventListener("keydown", event => {
+      if (event.target !== item) return;
+      const step = event.shiftKey ? 50 : 10;
+      const deltas = {
+        ArrowUp: [0, -step],
+        ArrowDown: [0, step],
+        ArrowLeft: [-step, 0],
+        ArrowRight: [step, 0],
+      };
+      const delta = deltas[event.key];
+      if (delta) {
+        event.preventDefault();
+        const pos = settlePosition(
+          list,
+          item,
+          parseFloat(item.style.left) + delta[0],
+          parseFloat(item.style.top) + delta[1]
+        );
+        item.style.left = `${pos.left}px`;
+        item.style.top = `${pos.top}px`;
+        persistResourcePosition(item);
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        persistResourcePosition(item);
+        showToast("Position saved.");
+      }
     })
   );
 }
@@ -1098,6 +1170,13 @@ async function handleAuth(event) {
 }
 async function init() {
   initCookieBanner();
+  const snapToggle = document.getElementById("resourceSnap");
+  if (snapToggle) {
+    snapToggle.checked = localStorage.getItem(RESOURCE_SNAP_KEY) === "on";
+    snapToggle.addEventListener("change", () =>
+      localStorage.setItem(RESOURCE_SNAP_KEY, snapToggle.checked ? "on" : "off")
+    );
+  }
   document.querySelectorAll("[data-scroll]").forEach(button =>
     button.addEventListener("click", () => {
       document

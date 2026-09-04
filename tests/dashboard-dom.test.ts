@@ -251,4 +251,221 @@ describe("cookie consent banner", () => {
     });
     expect(byId(doc, "cookieBanner")!.hasAttribute("hidden")).toBe(true);
   });
+
+  it("moves focus into the banner on first visit", async () => {
+    const { doc } = await bootApp();
+    expect(doc.activeElement).toBe(byId(doc, "cookieAccept"));
+  });
+
+  it("returns focus out of the banner once a choice is made", async () => {
+    const { doc } = await bootApp();
+    byId(doc, "cookieDecline")!.click();
+    expect(doc.activeElement).toBe(doc.body);
+    expect(byId(doc, "cookieBanner")!.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("gives glyph-only controls accessible names", async () => {
+    const { doc } = await bootApp();
+    expect(byId(doc, "timerStart")!.getAttribute("aria-label")).toBe(
+      "Start focus timer"
+    );
+    expect(byId(doc, "timerPause")!.getAttribute("aria-label")).toBe(
+      "Pause focus timer"
+    );
+    expect(byId(doc, "timerReset")!.getAttribute("aria-label")).toBe(
+      "Reset focus timer"
+    );
+    expect(byId(doc, "search")!.getAttribute("aria-label")).toBe(
+      "Find a checkpoint"
+    );
+    expect(
+      byId(doc, "cookieBanner")!.getAttribute("aria-label")
+    ).toBe("Cookie consent");
+  });
+});
+
+describe("resource canvas keyboard positioning", () => {
+  const addResource = (doc: Document) => {
+    (doc.getElementById("resourceName") as HTMLInputElement).value =
+      "30 Days of Python";
+    (doc.getElementById("resourceUrl") as HTMLInputElement).value =
+      "https://github.com/Asabeneh/30-Days-Of-Python";
+    doc
+      .getElementById("resourceForm")!
+      .dispatchEvent(
+        new doc.defaultView!.Event("submit", {
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+    return doc.querySelector<HTMLElement>("#resourceList .resource-item")!;
+  };
+
+  // jsdom has no layout engine (clientWidth/offsetWidth are 0), so stub the
+  // canvas metrics the clamping logic relies on.
+  const setCanvasMetrics = (doc: Document, item: HTMLElement) => {
+    const list = byId(doc, "resourceList")!;
+    Object.defineProperty(list, "clientWidth", {
+      configurable: true,
+      value: 640,
+    });
+    Object.defineProperty(list, "clientHeight", {
+      configurable: true,
+      value: 430,
+    });
+    Object.defineProperty(item, "offsetWidth", {
+      configurable: true,
+      value: 220,
+    });
+    Object.defineProperty(item, "offsetHeight", {
+      configurable: true,
+      value: 90,
+    });
+  };
+
+  const key = (doc: Document, target: Element, keyName: string, shift = false) =>
+    target.dispatchEvent(
+      new doc.defaultView!.KeyboardEvent("keydown", {
+        key: keyName,
+        bubbles: true,
+        cancelable: true,
+        shiftKey: shift,
+      })
+    );
+
+  it("resource cards are keyboard-focusable", async () => {
+    const { doc } = await bootApp();
+    const item = addResource(doc);
+    expect(item.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("arrow keys nudge a card and persist the new position", async () => {
+    const { doc } = await bootApp();
+    const item = addResource(doc);
+    setCanvasMetrics(doc, item);
+    expect(item.style.left).toBe("18px");
+
+    key(doc, item, "ArrowRight");
+    key(doc, item, "ArrowDown");
+
+    expect(item.style.left).toBe("28px");
+    expect(item.style.top).toBe("28px");
+    const saved = stored(doc)!;
+    const resource = (saved.resources as Array<Record<string, unknown>>)[0];
+    expect(resource.x).toBe(28);
+    expect(resource.y).toBe(28);
+  });
+
+  it("shift + arrow moves in a larger step", async () => {
+    const { doc } = await bootApp();
+    const item = addResource(doc);
+    setCanvasMetrics(doc, item);
+    key(doc, item, "ArrowRight", true);
+    expect(item.style.left).toBe("68px");
+  });
+
+  it("clamps movement at the canvas edges", async () => {
+    const { doc } = await bootApp();
+    const item = addResource(doc);
+    setCanvasMetrics(doc, item);
+    item.style.left = "600px";
+    key(doc, item, "ArrowRight");
+    expect(item.style.left).toBe("410px"); // 640 - 220 - 10
+    item.style.top = "5px";
+    key(doc, item, "ArrowUp");
+    expect(item.style.top).toBe("10px");
+  });
+
+  it("Enter persists the current position and confirms it", async () => {
+    const { doc } = await bootApp();
+    const item = addResource(doc);
+    setCanvasMetrics(doc, item);
+    item.style.left = "77px";
+    item.style.top = "99px";
+    key(doc, item, "Enter");
+    const saved = stored(doc)!;
+    const resource = (saved.resources as Array<Record<string, unknown>>)[0];
+    expect(resource.x).toBe(77);
+    expect(resource.y).toBe(99);
+    expect(text(byId(doc, "toast"))).toContain("Position saved");
+  });
+
+  it("does not move the card while its inner delete button is focused", async () => {
+    const { doc } = await bootApp();
+    const item = addResource(doc);
+    setCanvasMetrics(doc, item);
+    const del = item.querySelector<HTMLElement>("[data-resource-delete]")!;
+    key(doc, del, "ArrowRight");
+    expect(item.style.left).toBe("18px");
+  });
+
+  it("snap toggle defaults to off and persists its choice", async () => {
+    const { doc } = await bootApp();
+    const toggle = byId(doc, "resourceSnap") as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    toggle.checked = true;
+    toggle.dispatchEvent(new doc.defaultView!.Event("change", { bubbles: true }));
+    expect(doc.defaultView!.localStorage.getItem("semassist-resource-snap")).toBe(
+      "on"
+    );
+    const reloaded = await bootApp({
+      preSeed: { "semassist-resource-snap": "on" },
+    });
+    expect(
+      (byId(reloaded.doc, "resourceSnap") as HTMLInputElement).checked
+    ).toBe(true);
+  });
+
+  it("arrow keys snap to the 18px grid when snap is on", async () => {
+    const { doc } = await bootApp({
+      preSeed: { "semassist-resource-snap": "on" },
+    });
+    const item = addResource(doc);
+    setCanvasMetrics(doc, item);
+    expect(item.style.left).toBe("18px");
+
+    key(doc, item, "ArrowRight"); // 18 + 10 = 28 → nearest 18-multiple = 36
+    key(doc, item, "ArrowDown");
+
+    expect(item.style.left).toBe("36px");
+    expect(item.style.top).toBe("36px");
+    const saved = stored(doc)!;
+    const resource = (saved.resources as Array<Record<string, unknown>>)[0];
+    expect(resource.x).toBe(36);
+    expect(resource.y).toBe(36);
+  });
+
+  it("drag release snaps to the grid when snap is on", async () => {
+    const { doc } = await bootApp({
+      preSeed: { "semassist-resource-snap": "on" },
+    });
+    const item = addResource(doc);
+    setCanvasMetrics(doc, item);
+    (item as unknown as { setPointerCapture: () => void }).setPointerCapture =
+      () => {};
+    const fire = (type: string, clientX: number, clientY: number) => {
+      const event = new doc.defaultView!.Event(type, {
+        bubbles: true,
+        cancelable: true,
+      }) as Event & {
+        clientX: number;
+        clientY: number;
+        pointerId: number;
+      };
+      event.clientX = clientX;
+      event.clientY = clientY;
+      event.pointerId = 1;
+      item.dispatchEvent(event);
+    };
+    fire("pointerdown", 0, 0);
+    fire("pointermove", 46, 23); // raw target 46,23 → snapped 54,18
+    fire("pointerup", 46, 23);
+
+    expect(item.style.left).toBe("54px");
+    expect(item.style.top).toBe("18px");
+    const saved = stored(doc)!;
+    const resource = (saved.resources as Array<Record<string, unknown>>)[0];
+    expect(resource.x).toBe(54);
+    expect(resource.y).toBe(18);
+  });
 });
