@@ -2,6 +2,7 @@
 // module can also be imported in a Node test environment without fetching esm.sh.
 const STORAGE_KEY = "aster-study-dashboard-v3";
 const LEGACY_KEY = "mission-cs-study-dashboard-v1";
+const COOKIE_CONSENT_KEY = "semassist-cookie-consent";
 const WEEKDAY_NAMES = [
   "Monday",
   "Tuesday",
@@ -499,6 +500,26 @@ function showToast(message) {
   toast.classList.add("show");
   clearTimeout(window.toastTimer);
   window.toastTimer = setTimeout(() => toast.classList.remove("show"), 1800);
+}
+// Cookie consent banner. The dashboard stores study progress and the sign-in
+// session in localStorage only and sets no tracking cookies, so both buttons
+// are informational: the choice is persisted so the banner shows once per
+// browser, and nothing about the app's behavior changes either way.
+function initCookieBanner() {
+  const banner = document.getElementById("cookieBanner");
+  if (!banner) return;
+  if (localStorage.getItem(COOKIE_CONSENT_KEY)) return;
+  banner.hidden = false;
+  const setConsent = value => {
+    try {
+      localStorage.setItem(COOKIE_CONSENT_KEY, value);
+    } catch {}
+    banner.hidden = true;
+  };
+  const accept = document.getElementById("cookieAccept");
+  const decline = document.getElementById("cookieDecline");
+  accept?.addEventListener("click", () => setConsent("accepted"));
+  decline?.addEventListener("click", () => setConsent("declined"));
 }
 function getStats(state) {
   let total = 0,
@@ -1076,6 +1097,7 @@ async function handleAuth(event) {
       : "Signed in successfully.";
 }
 async function init() {
+  initCookieBanner();
   document.querySelectorAll("[data-scroll]").forEach(button =>
     button.addEventListener("click", () => {
       document
@@ -1194,6 +1216,8 @@ async function init() {
 export {
   STORAGE_KEY,
   LEGACY_KEY,
+  COOKIE_CONSENT_KEY,
+  initCookieBanner,
   tracks,
   taskId,
   dateKey,

@@ -223,3 +223,32 @@ describe("custom task activity bookkeeping", () => {
     );
   });
 });
+
+describe("cookie consent banner", () => {
+  it("shows on first visit; Accept dismisses it and persists the choice", async () => {
+    const { doc, win } = await bootApp();
+    const banner = byId(doc, "cookieBanner")!;
+    expect(banner.hasAttribute("hidden")).toBe(false);
+    byId(doc, "cookieAccept")!.click();
+    expect(banner.hasAttribute("hidden")).toBe(true);
+    expect(win.localStorage.getItem("semassist-cookie-consent")).toBe(
+      "accepted"
+    );
+  });
+
+  it("Decline dismisses it too and records the choice", async () => {
+    const { doc, win } = await bootApp();
+    byId(doc, "cookieDecline")!.click();
+    expect(byId(doc, "cookieBanner")!.hasAttribute("hidden")).toBe(true);
+    expect(win.localStorage.getItem("semassist-cookie-consent")).toBe(
+      "declined"
+    );
+  });
+
+  it("stays hidden when a consent choice was already stored", async () => {
+    const { doc } = await bootApp({
+      preSeed: { "semassist-cookie-consent": "accepted" },
+    });
+    expect(byId(doc, "cookieBanner")!.hasAttribute("hidden")).toBe(true);
+  });
+});
