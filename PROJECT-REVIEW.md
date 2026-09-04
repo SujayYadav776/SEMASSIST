@@ -228,10 +228,11 @@ real production code.
    for local dev, but ensure it is never used in production.
 
 ### Low
-9. **Email confirmation link depends on a hardcoded `http://localhost:3000` redirect.**
-   `supabase-config.js` pins `redirectUrl` to localhost. Deployed without editing, password-reset
-   and confirmation emails point at localhost and the flow silently breaks; on an HTTPS origin the
-   callback also mismatches. Make it relative to `window.location.origin` or a build-time env var.
+9. ~~**Email confirmation link depends on a hardcoded `http://localhost:3000` redirect.**~~ **Resolved.**
+   `supabase-config.js` now derives `redirectUrl` from `window.location.origin` + `/study-dashboard.html`,
+   so it follows whichever origin is serving the app (localhost in dev, `https://semassist.runs-on.dev`
+   in production). The Supabase dashboard must still allowlist each deployed origin in Authentication →
+   URL Configuration (Site URL + Redirect URLs).
 10. **`dangerouslySetInnerHTML`** in `Home.tsx` runs a script string; it is static and safe today but
     is a code smell — replace with a normal redirect in an effect.
 

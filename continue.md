@@ -91,7 +91,7 @@ Configured Supabase project:
 
 - URL: `https://nrxbelpmydquivcphxry.supabase.co`
 - Public/publishable key: stored in `client/public/supabase-config.js`
-- Redirect URL: `http://localhost:3000/study-dashboard.html`
+- Redirect URL: derived from `window.location.origin` + `/study-dashboard.html` in `supabase-config.js` (localhost in dev, deployed origin in production)
 
 Do not add a Supabase `service_role` key to the client or repository. The configured publishable key is intended for browser use and depends on Row Level Security.
 
@@ -104,9 +104,9 @@ The public key cannot create schema or modify Supabase settings. Before authenti
 1. Run `supabase/schema.sql` in Supabase Dashboard → SQL Editor.
 2. Enable Email authentication in Supabase Dashboard → Authentication.
 3. In Authentication → URL Configuration, set:
-   - Site URL: `http://localhost:3000` for local development.
-   - Redirect URL: `http://localhost:3000/study-dashboard.html`.
-4. Replace that callback in `supabase-config.js` with the deployed HTTPS dashboard URL before production deployment, and allow the deployed URL in Supabase.
+   - Site URL: `http://localhost:3000` for local development (and `https://semassist.runs-on.dev/study-dashboard.html` for production).
+   - Redirect URL: `http://localhost:3000/study-dashboard.html` and `https://semassist.runs-on.dev/study-dashboard.html`.
+4. `supabase-config.js` derives `redirectUrl` from `window.location.origin`, so no code change is needed between environments — just ensure every deployed origin is allowlisted in Supabase's URL Configuration.
 
 The app must be served over HTTP(S), not opened directly as a `file://` URL, for Supabase email confirmation redirects to work. The in-app browser was observed opening the static file directly, so this caveat remains important.
 
