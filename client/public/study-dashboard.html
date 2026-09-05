@@ -48,7 +48,7 @@
       .main-nav { display: flex; align-items: center; justify-content: center; gap: 2px; flex: 1; min-width: 0; padding: 4px; border-radius: 15px; background: rgba(255,255,255,.54); }
       .nav-button { border: 0; border-radius: 12px; padding: 9px 12px; color: #53534f; background: transparent; font-size: 11px; white-space: nowrap; transition: .18s var(--ease); }
       .nav-button:hover, .nav-button.active { color: white; background: var(--charcoal); box-shadow: 0 5px 10px rgba(0,0,0,.11); }
-      .top-actions { display: flex; gap: 7px; }
+      .top-actions { display: flex; gap: 7px; margin-left: auto; }
       .icon-button { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(255,255,255,.7); color: var(--ink); font-size: 15px; transition: transform .18s var(--ease), background .18s var(--ease); }
       .icon-button:hover { transform: translateY(-2px); background: white; }
 
@@ -271,38 +271,6 @@
       :root[data-theme="dark"] .auth-form input { border-color: #4a4842; background: #33322e; }
       :root[data-theme="dark"] .auth-switch { color: #d5d3cb; }
       :root[data-theme="dark"] .signed-in { border-color: #4a4842; color: #b5b3ab; background: rgba(43,42,38,.94); }
-
-      /* Auto theme icon: a small sun with a crescent moon beside it, drawn in
-         CSS (no icon library). The mask makes the moon a true crescent without
-         needing to match the button's background. */
-      [data-theme-toggle] { position: relative; }
-      [data-theme-toggle][data-theme-icon="auto"]::before,
-      [data-theme-toggle][data-theme-icon="auto"]::after {
-        content: "";
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-      }
-      /* Sun (left): disc with four ray stubs. */
-      [data-theme-toggle][data-theme-icon="auto"]::before {
-        left: calc(50% - 8px);
-        background: currentColor;
-        box-shadow:
-          0 -4px 0 -2.5px currentColor,
-          0 4px 0 -2.5px currentColor,
-          -4px 0 0 -2.5px currentColor,
-          4px 0 0 -2.5px currentColor;
-      }
-      /* Moon (right): crescent cut out of a disc with a mask. */
-      [data-theme-toggle][data-theme-icon="auto"]::after {
-        left: 50%;
-        background: currentColor;
-        -webkit-mask: radial-gradient(circle at 35% 50%, transparent 3.5px, #000 4px);
-        mask: radial-gradient(circle at 35% 50%, transparent 3.5px, #000 4px);
-      }
     </style>
     <script src="./theme.js"></script>
   </head>

@@ -1,9 +1,7 @@
 // Shared theme module for SEM ASSIST pages (404 page and study dashboard).
-// One localStorage key — "sem-assist-theme" — so the light/dark/auto choice
-// made on either page applies to every page on the same origin.
-// Modes: "light", "dark", or "auto" (follow the OS preference, live).
-// The toggle cycles light → dark → auto → light; the glyph shows the NEXT
-// state and the label names current + next.
+// One localStorage key — "sem-assist-theme" — so the light/dark choice made
+// on either page applies to every page on the same origin. Follows the OS
+// preference until the user toggles; the toggle pins an explicit choice.
 // Runs in <head> before first paint (no theme flash). CSP-safe: same-origin
 // external file, no inline script.
 (function () {
@@ -11,42 +9,13 @@
 
   var STORAGE_KEY = "sem-assist-theme";
   var LEGACY_KEY = "sem-assist-404-theme";
-  var MODES = ["light", "dark", "auto"]; // click cycle: light → dark → auto
   var root = document.documentElement;
   var themeColorMetas = Array.prototype.slice.call(
     document.querySelectorAll('meta[name="theme-color"]')
   );
-  var currentMode = "auto";
 
   function themeColorFor(theme) {
     return theme === "dark" ? "#23221f" : "#a9afba";
-  }
-
-  function osPrefersDark() {
-    return !!(
-      window.matchMedia &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches
-    );
-  }
-
-  function resolveTheme(mode) {
-    if (mode === "light" || mode === "dark") return mode;
-    return osPrefersDark() ? "dark" : "light";
-  }
-
-  function nextMode(mode) {
-    return MODES[(MODES.indexOf(mode) + 1) % MODES.length];
-  }
-
-  function modeLabel(mode) {
-    switch (nextMode(mode)) {
-      case "dark":
-        return "Theme: light — switch to dark";
-      case "auto":
-        return "Theme: dark — switch to auto (follow system)";
-      default:
-        return "Theme: auto (follow system) — switch to light";
-    }
   }
 
   function setThemeColor(theme) {
@@ -56,38 +25,33 @@
     });
   }
 
-  function updateToggleButton(mode) {
+  function updateToggleButton(theme) {
     var btn = document.querySelector("[data-theme-toggle]");
     if (!btn) return;
-    var label = modeLabel(mode);
+    var next = theme === "dark" ? "light" : "dark";
+    btn.textContent = theme === "dark" ? "\u2600" : "\u263E"; // ☀ / ☾
+    var label = "Switch to " + next + " theme";
     btn.setAttribute("aria-label", label);
     btn.setAttribute("title", label);
-    var next = nextMode(mode);
-    if (next === "auto") {
-      // Auto state: CSS-drawn sun/moon icon (see the pages' stylesheets).
-      btn.textContent = "";
-      btn.setAttribute("data-theme-icon", "auto");
-    } else {
-      btn.textContent = next === "dark" ? "\u263E" : "\u2600"; // ☾ / ☀
-      btn.removeAttribute("data-theme-icon");
-    }
   }
 
-  function applyTheme(mode) {
-    currentMode = mode;
-    var theme = resolveTheme(mode);
+  function applyTheme(theme) {
     root.setAttribute("data-theme", theme);
-    root.setAttribute("data-theme-mode", mode);
     setThemeColor(theme);
-    updateToggleButton(mode);
+    updateToggleButton(theme);
   }
 
   function readPreference() {
     var saved = null;
     try {
       saved = localStorage.getItem(STORAGE_KEY);
-      if (MODES.indexOf(saved) === -1) {
-        // Migrate the old 404-only key (light/dark) if the shared one is unset.
+      if (saved !== "light" && saved !== "dark") {
+        // "auto" from the earlier three-state build counts as no preference.
+        if (saved === "auto") {
+          localStorage.removeItem(STORAGE_KEY);
+          saved = null;
+        }
+        // Migrate the old 404-only key if the shared one was never set.
         var legacy = localStorage.getItem(LEGACY_KEY);
         if (legacy === "light" || legacy === "dark") {
           localStorage.setItem(STORAGE_KEY, legacy);
@@ -96,9 +60,22 @@
         }
       }
     } catch (e) {
-      /* storage unavailable — fall through to auto */
+      /* storage unavailable — fall through to OS default */
     }
-    return MODES.indexOf(saved) !== -1 ? saved : "auto";
+    if (saved === "light" || saved === "dark") return saved;
+    return window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  }
+
+  function hasSavedPreference() {
+    try {
+      var v = localStorage.getItem(STORAGE_KEY);
+      return v === "light" || v === "dark";
+    } catch (e) {
+      return false;
+    }
   }
 
   applyTheme(readPreference());
@@ -107,12 +84,12 @@
     var btn = document.querySelector("[data-theme-toggle]");
     if (!btn) return;
 
-    // The button markup ships with a placeholder glyph; sync it now that it
-    // exists so it reflects the resolved mode.
-    updateToggleButton(currentMode);
+    // The button markup ships with a default glyph; sync it now that it exists.
+    updateToggleButton(root.getAttribute("data-theme") === "dark" ? "dark" : "light");
 
     btn.addEventListener("click", function () {
-      var next = nextMode(currentMode);
+      var current = root.getAttribute("data-theme") === "dark" ? "dark" : "light";
+      var next = current === "dark" ? "light" : "dark";
       try {
         localStorage.setItem(STORAGE_KEY, next);
       } catch (e) {
@@ -122,12 +99,12 @@
     });
   });
 
-  // Follow OS theme changes live while the mode is "auto".
+  // Follow OS theme changes live, but only while no explicit choice is saved.
   try {
     var mq = window.matchMedia("(prefers-color-scheme: dark)");
-    var onOsChange = function () {
-      if (currentMode !== "auto") return;
-      applyTheme("auto"); // re-resolves against the new OS preference
+    var onOsChange = function (e) {
+      if (hasSavedPreference()) return;
+      applyTheme(e.matches ? "dark" : "light");
     };
     if (mq.addEventListener) mq.addEventListener("change", onOsChange);
     else if (mq.addListener) mq.addListener(onOsChange);
@@ -136,10 +113,10 @@
   }
 
   // Sync across open tabs/pages of the same origin: toggling on one page
-  // updates the others immediately.
+  // updates the other immediately.
   window.addEventListener("storage", function (e) {
     if (e.key !== STORAGE_KEY) return;
     var v = e.newValue;
-    applyTheme(MODES.indexOf(v) !== -1 ? v : "auto");
+    if (v === "light" || v === "dark") applyTheme(v);
   });
 })();

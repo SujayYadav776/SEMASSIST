@@ -165,37 +165,6 @@
       .theme-toggle:hover { transform: translateY(-2px); background: #fff; }
       .theme-toggle:focus-visible { outline: 3px solid rgba(45,45,43,.55); outline-offset: 3px; }
 
-      /* Auto state: a small sun with a crescent moon beside it, drawn in CSS
-         (no icon library). The mask makes the moon a true crescent without
-         needing to match the button's background color. */
-      [data-theme-toggle][data-theme-icon="auto"]::before,
-      [data-theme-toggle][data-theme-icon="auto"]::after {
-        content: "";
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-      }
-      /* Sun (left): disc with four ray stubs. */
-      [data-theme-toggle][data-theme-icon="auto"]::before {
-        left: calc(50% - 8px);
-        background: currentColor;
-        box-shadow:
-          0 -4px 0 -2.5px currentColor,
-          0 4px 0 -2.5px currentColor,
-          -4px 0 0 -2.5px currentColor,
-          4px 0 0 -2.5px currentColor;
-      }
-      /* Moon (right): crescent cut out of a disc with a mask. */
-      [data-theme-toggle][data-theme-icon="auto"]::after {
-        left: 50%;
-        background: currentColor;
-        -webkit-mask: radial-gradient(circle at 35% 50%, transparent 3.5px, #000 4px);
-        mask: radial-gradient(circle at 35% 50%, transparent 3.5px, #000 4px);
-      }
-
       /* Dark variant: keeps the SEM ASSIST palette — the warm yellow stays the
          signature accent, charcoal becomes the canvas, and the cream paper tone
          becomes the text color. Driven by the data-theme attribute the small
