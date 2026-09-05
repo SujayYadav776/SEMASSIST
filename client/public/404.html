@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#a9afba" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#23221f" />
+    <meta name="description" content="Page not found — SEM ASSIST study dashboard" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://esm.sh https://nrxbelpmydquivcphxry.supabase.co wss://nrxbelpmydquivcphxry.supabase.co ws://localhost:* ws://127.0.0.1:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <!-- Theme init must run before first paint to avoid a theme flash. Shared
+         with the dashboard (one localStorage key); CSP-safe: same-origin file,
+         no inline script. -->
+    <script src="./theme.js"></script>
+    <title>404 — SEM ASSIST</title>
+    <style>
+      /* Matches the dashboard's design language: pearl-gray canvas, cream card,
+         charcoal ink, warm yellow accents, rounded corners, Manrope/DM Sans. */
+      :root {
+        color-scheme: light dark;
+        --canvas: #a9afba;
+        --paper: #efefec;
+        --card: rgba(255, 255, 253, 0.88);
+        --ink: #20201f;
+        --muted: #777773;
+        --line: #d9d8d1;
+        --yellow: #f6ce50;
+        --yellow-soft: #ffeb9b;
+        --charcoal: #2d2d2b;
+        --soft-shadow: 0 25px 65px rgba(44, 48, 58, 0.24);
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100vh;
+        color: var(--ink);
+        font-family: "DM Sans", sans-serif;
+        background: radial-gradient(circle at 18% 10%, rgba(255,255,255,.28), transparent 27rem),
+          linear-gradient(135deg, #a6adb9 0%, #b7bcc3 47%, #aeb5bf 100%);
+      }
+      a { color: inherit; }
+      a:focus-visible { outline: 3px solid rgba(45,45,43,.55); outline-offset: 3px; }
+
+      .page {
+        min-height: 100vh;
+        min-height: 100svh; /* dynamic mobile URL bar: keeps the card centered */
+        padding: clamp(18px, 5vw, 54px);
+        display: grid;
+        place-items: center;
+      }
+      .card {
+        width: min(480px, 100%);
+        padding: clamp(30px, 6vw, 48px);
+        border: 1px solid rgba(255,255,255,.58);
+        border-radius: 28px;
+        background: radial-gradient(circle at 85% 8%, rgba(255,224,102,.5), transparent 16rem),
+          radial-gradient(circle at 15% 92%, rgba(255,244,193,.75), transparent 18rem),
+          var(--card);
+        box-shadow: var(--soft-shadow);
+        text-align: center;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        font: 800 18px/1 "Manrope", sans-serif;
+        letter-spacing: -.07em;
+      }
+      .brand-mark {
+        position: relative;
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border-radius: 10px;
+        /* Dark ink on yellow in both schemes: the monogram's contrast comes
+           from the fixed yellow, so its text stays dark under dark mode too. */
+        color: #20201f;
+        background: var(--yellow);
+        font: 800 18px/1 "Manrope", sans-serif;
+        letter-spacing: -.12em;
+      }
+      .brand-mark::before { content: "S"; transform: translateX(-1px); }
+      .brand-mark::after {
+        content: "";
+        position: absolute;
+        right: 6px;
+        bottom: 6px;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #20201f;
+      }
+
+      .code {
+        margin: 34px 0 0;
+        font: 800 clamp(64px, 16vw, 108px)/0.95 "Manrope", sans-serif;
+        letter-spacing: -.09em;
+      }
+      .code small {
+        display: block;
+        margin-bottom: 10px;
+        color: var(--muted);
+        font: 700 11px/1 "Manrope", sans-serif;
+        letter-spacing: .22em;
+        text-transform: uppercase;
+      }
+      h1 {
+        margin: 18px 0 0;
+        font: 600 clamp(22px, 4.5vw, 30px)/1.15 "Manrope", sans-serif;
+        letter-spacing: -.05em;
+      }
+      p.lead {
+        margin: 12px auto 0;
+        max-width: 340px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .actions { margin-top: 30px; }
+      .back-button {
+        display: inline-block;
+        padding: 13px 22px;
+        border: 0;
+        border-radius: 12px;
+        /* Dark ink on yellow in both schemes, same as the brand mark. */
+        color: #20201f;
+        background: var(--yellow);
+        font: 700 12px "Manrope", sans-serif;
+        text-decoration: none;
+        box-shadow: 0 5px 12px rgba(186, 144, 36, .2);
+        transition: transform .16s var(--ease), box-shadow .16s var(--ease);
+      }
+      .back-button:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(186,144,36,.26); }
+      .back-button:active { transform: translateY(0); }
+
+      .hint { margin: 16px 0 0; color: #8b8a83; font-size: 10px; }
+
+      /* Theme toggle: round icon button echoing the dashboard's .icon-button.
+         Fixed top-right so it never collides with the centered card. */
+      .theme-toggle {
+        position: fixed;
+        top: 18px;
+        right: 18px;
+        z-index: 20;
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(255,255,255,.7);
+        color: var(--ink);
+        font-size: 16px;
+        box-shadow: 0 5px 12px rgba(56, 56, 47, .12);
+        transition: transform .16s var(--ease), background .16s var(--ease), box-shadow .16s var(--ease);
+      }
+      .theme-toggle:hover { transform: translateY(-2px); background: #fff; }
+      .theme-toggle:focus-visible { outline: 3px solid rgba(45,45,43,.55); outline-offset: 3px; }
+
+      /* Auto state: a small sun with a crescent moon beside it, drawn in CSS
+         (no icon library). The mask makes the moon a true crescent without
+         needing to match the button's background color. */
+      [data-theme-toggle][data-theme-icon="auto"]::before,
+      [data-theme-toggle][data-theme-icon="auto"]::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+      /* Sun (left): disc with four ray stubs. */
+      [data-theme-toggle][data-theme-icon="auto"]::before {
+        left: calc(50% - 8px);
+        background: currentColor;
+        box-shadow:
+          0 -4px 0 -2.5px currentColor,
+          0 4px 0 -2.5px currentColor,
+          -4px 0 0 -2.5px currentColor,
+          4px 0 0 -2.5px currentColor;
+      }
+      /* Moon (right): crescent cut out of a disc with a mask. */
+      [data-theme-toggle][data-theme-icon="auto"]::after {
+        left: 50%;
+        background: currentColor;
+        -webkit-mask: radial-gradient(circle at 35% 50%, transparent 3.5px, #000 4px);
+        mask: radial-gradient(circle at 35% 50%, transparent 3.5px, #000 4px);
+      }
+
+      /* Dark variant: keeps the SEM ASSIST palette — the warm yellow stays the
+         signature accent, charcoal becomes the canvas, and the cream paper tone
+         becomes the text color. Driven by the data-theme attribute the small
+         head script sets (OS preference by default, explicit choice after the
+         toggle). Kept last so its component rules win the cascade. */
+      :root[data-theme="dark"] {
+        --canvas: #23221f;
+        --paper: #2b2a26;
+        --card: rgba(42, 41, 37, 0.92);
+        --ink: #efefec;
+        --muted: #9d9b91;
+        --line: #3a3833;
+        --yellow-soft: #8a6d1f;
+        --soft-shadow: 0 25px 65px rgba(0, 0, 0, 0.5);
+      }
+      :root[data-theme="dark"] body {
+        background: radial-gradient(circle at 18% 10%, rgba(255,224,102,.06), transparent 27rem),
+          linear-gradient(135deg, #23221f 0%, #1c1b18 47%, #201f1c 100%);
+      }
+      :root[data-theme="dark"] .card {
+        border-color: rgba(255,255,255,.07);
+        background: radial-gradient(circle at 85% 8%, rgba(246,206,80,.13), transparent 16rem),
+          radial-gradient(circle at 15% 92%, rgba(246,206,80,.07), transparent 18rem),
+          var(--card);
+      }
+      :root[data-theme="dark"] a:focus-visible { outline-color: rgba(246,206,80,.65); }
+      :root[data-theme="dark"] .back-button { box-shadow: 0 5px 12px rgba(0,0,0,.35); }
+      :root[data-theme="dark"] .back-button:hover { box-shadow: 0 8px 16px rgba(0,0,0,.45); }
+      :root[data-theme="dark"] .hint { color: #98968d; }
+      :root[data-theme="dark"] .theme-toggle {
+        background: rgba(255,255,255,.1);
+        box-shadow: 0 5px 14px rgba(0,0,0,.35);
+      }
+      :root[data-theme="dark"] .theme-toggle:hover { background: rgba(255,255,255,.16); }
+      :root[data-theme="dark"] .theme-toggle:focus-visible { outline-color: rgba(246,206,80,.65); }
+
+      /* Mobile: same 680px breakpoint as the dashboard, where its primary
+         buttons go full-width; the taller CTA also clears the 44px touch
+         target on phones. */
+      @media (max-width: 680px) {
+        .card { border-radius: 22px; }
+        .actions { margin-top: 26px; }
+        .back-button {
+          width: 100%;
+          padding: 15px 24px;
+          font-size: 13px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <button class="theme-toggle" id="themeToggle" data-theme-toggle type="button" aria-label="Switch to dark theme" title="Switch to dark theme">☾</button>
+      <main class="card">
+        <div class="brand" aria-hidden="true"><span class="brand-mark"></span><span>SEM ASSIST</span></div>
+        <p class="code"><small>Page not found</small>404</p>
+        <h1>This page wandered off the roadmap.</h1>
+        <p class="lead">The link may be broken, or the page may have moved. Head back to the dashboard to keep your progress going.</p>
+        <div class="actions">
+          <a class="back-button" href="/study-dashboard.html">Back to dashboard</a>
+        </div>
+        <p class="hint">Semester 3 · Python · Java · OS / Linux</p>
+      </main>
+    </div>
+  </body>
+</html>

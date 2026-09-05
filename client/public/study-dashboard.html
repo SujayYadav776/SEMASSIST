@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#a9afba" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#23221f" />
     <meta name="description" content="A soft, modular Python, Java, and Operating Systems study dashboard" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://esm.sh https://nrxbelpmydquivcphxry.supabase.co wss://nrxbelpmydquivcphxry.supabase.co ws://localhost:* ws://127.0.0.1:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -167,6 +168,143 @@
       @media (max-width: 680px) { .page { padding: 0; }.dashboard { border-radius: 0; min-height: 100vh; padding: 12px; }.topbar { gap: 10px; }.brand { font-size: 17px; }.top-actions { margin-left: auto; }.main-nav { gap: 0; }.nav-button { padding: 8px 10px; font-size: 10px; }.intro { padding-top: 13px; gap: 12px; }.intro h1 { font-size: 31px; }.headline-progress { grid-template-columns: 64px 64px 1fr; gap: 6px; }.headline-progress .os { display: none; }.intro-stats { justify-content: space-between; gap: 9px; }.intro-stat strong { font-size: 28px; }.overview-grid { grid-template-columns: 1fr; }.focus-card, .progress-card, .timer-card, .mission-card { min-height: auto; }.lower-grid { margin-top: 10px; }.track-summary { grid-template-columns: 1fr 1fr; }.checkpoints { grid-template-columns: 1fr; }.track-card.wide { grid-column: auto; }.workbench, .custom-card, .resource-card { padding: 14px; }.workbench-top, .custom-head { align-items: flex-start; }.resource-head-actions { flex-direction: column; align-items: flex-end; gap: 6px; }.search { width: 130px; }.calendar-head { align-items: flex-start; flex-direction: column; }.calendar-summary { text-align: left; }.custom-form, .resource-form { grid-template-columns: 1fr 1fr; }.custom-field:first-child, .resource-form .custom-field:first-child { grid-column: 1 / -1; }.resource-form .custom-field:nth-child(2) { grid-column: 1 / -1; }.add-button { width: 100%; }.resource-list { min-height: 500px; }.resource-item { width: min(210px, calc(100% - 20px)); }.footer-row { align-items: flex-start; flex-direction: column; }.task-meta { display: none; } }
       @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
     </style>
+    <style>
+      /* Dark variant: shares the theme preference (localStorage key
+         "sem-assist-theme") with the 404 page via theme.js, which sets
+         data-theme on <html>. Keeps the SEM ASSIST palette: warm yellow stays
+         the signature accent, charcoal becomes the canvas, cream becomes text.
+         Purely additive overrides; light mode is untouched. */
+      :root[data-theme="dark"] {
+        --canvas: #23221f;
+        --paper: #2b2a26;
+        --card: rgba(43, 42, 38, 0.92);
+        --ink: #efefec;
+        --muted: #9d9b91;
+        --line: #3a3833;
+        --yellow-soft: #8a6d1f;
+        --soft-shadow: 0 25px 65px rgba(0, 0, 0, 0.5);
+        --card-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+      }
+      :root[data-theme="dark"] body {
+        background: radial-gradient(circle at 18% 10%, rgba(255,224,102,.05), transparent 27rem),
+          linear-gradient(135deg, #23221f 0%, #1c1b18 47%, #201f1c 100%);
+      }
+      /* Fixed-ink-on-yellow surfaces: contrast stays dark-on-yellow in dark mode. */
+      :root[data-theme="dark"] .brand-mark,
+      :root[data-theme="dark"] .progress-chip.python strong,
+      :root[data-theme="dark"] .add-button,
+      :root[data-theme="dark"] .cookie-accept,
+      :root[data-theme="dark"] .auth-submit,
+      :root[data-theme="dark"] .check:checked::after { color: #20201f; }
+      :root[data-theme="dark"] .main-nav { background: rgba(255,255,255,.06); }
+      :root[data-theme="dark"] .nav-button { color: #b5b3ab; }
+      :root[data-theme="dark"] .nav-button:hover { background: #3d3b36; box-shadow: none; }
+      :root[data-theme="dark"] .icon-button, :root[data-theme="dark"] .arrow-link { background: rgba(255,255,255,.08); }
+      :root[data-theme="dark"] .icon-button:hover, :root[data-theme="dark"] .arrow-link:hover { background: rgba(255,255,255,.15); }
+      :root[data-theme="dark"] .intro h1 em { color: #c9c7bf; }
+      :root[data-theme="dark"] .intro-note { color: #9d9b91; }
+      :root[data-theme="dark"] .progress-chip small { color: #9d9b91; }
+      :root[data-theme="dark"] .progress-chip.os strong { background: #33322e; border-color: #4a4842; }
+      :root[data-theme="dark"] .long-progress { border-color: rgba(255,255,255,.12); background: repeating-linear-gradient(120deg, rgba(255,255,255,.05) 0 1px, transparent 1px 4px), rgba(255,255,255,.04); }
+      :root[data-theme="dark"] .intro-stat .stat-icon { background: rgba(255,255,255,.08); }
+      :root[data-theme="dark"] .intro-stat span { color: #9d9b91; }
+      :root[data-theme="dark"] .card { border-color: rgba(255,255,255,.08); }
+      :root[data-theme="dark"] .card-kicker { color: #9d9b91; }
+      :root[data-theme="dark"] .focus-card { background: linear-gradient(145deg, rgba(58,56,51,.94), rgba(45,44,40,.75)); }
+      :root[data-theme="dark"] .focus-caption span { color: #9d9b91; }
+      :root[data-theme="dark"] .progress-number span { color: #9d9b91; }
+      :root[data-theme="dark"] .study-bars { border-bottom-color: #3a3833; }
+      :root[data-theme="dark"] .weekly-value { color: #9d9b91; }
+      :root[data-theme="dark"] .bar-rail { background: rgba(255,255,255,.1); }
+      :root[data-theme="dark"] .bar-stick { background: #5c5a54; }
+      :root[data-theme="dark"] .bar-label { color: #9d9b91; }
+      :root[data-theme="dark"] .weekly-note { color: #9d9b91; }
+      :root[data-theme="dark"] .timer-ring { background: conic-gradient(var(--yellow) var(--ring-progress), #3a3833 0); }
+      :root[data-theme="dark"] .timer-ring::before { background: #2b2a26; }
+      :root[data-theme="dark"] .timer-content span { color: #9d9b91; }
+      :root[data-theme="dark"] .circle-control { background: rgba(255,255,255,.08); }
+      :root[data-theme="dark"] .mission-card { background: linear-gradient(160deg, rgba(58,56,51,.94), rgba(50,48,42,.7)); }
+      :root[data-theme="dark"] .segment { background: #55534d; }
+      :root[data-theme="dark"] .calendar-summary { background: #33322e; color: #b5b3ab; }
+      :root[data-theme="dark"] .activity-dot { background: #3c3a35; }
+      :root[data-theme="dark"] .calendar-foot { color: #9d9b91; }
+      :root[data-theme="dark"] .track-row { color: #b5b3ab; }
+      :root[data-theme="dark"] .track-row .mini-line { background: #3c3a35; }
+      :root[data-theme="dark"] .filter { background: #33322e; color: #b5b3ab; }
+      :root[data-theme="dark"] .filter:hover { background: #3d3b36; color: #efefec; }
+      :root[data-theme="dark"] .search { border-color: #4a4842; background: #33322e; }
+      :root[data-theme="dark"] .search::placeholder { color: #8f8d84; }
+      :root[data-theme="dark"] .track-card { border-color: #3a3833; background: rgba(255,255,255,.04); }
+      :root[data-theme="dark"] .track-head { border-bottom-color: #3a3833; background: linear-gradient(90deg, color-mix(in srgb, var(--track) 30%, #2b2a26), rgba(255,255,255,.04)); }
+      :root[data-theme="dark"] .track-name p { color: #9d9b91; }
+      :root[data-theme="dark"] .source-link { color: #b5b3ab; }
+      :root[data-theme="dark"] .task-row { border-bottom-color: #3a3833; }
+      :root[data-theme="dark"] .task-row.done .task-text { color: #6e6c65; }
+      :root[data-theme="dark"] .task-text { color: #d5d3cb; }
+      :root[data-theme="dark"] .task-row:hover .task-text { color: #efefec; }
+      :root[data-theme="dark"] .check { border-color: #55534d; background: #33322e; }
+      :root[data-theme="dark"] .task-meta { color: #8f8d84; }
+      :root[data-theme="dark"] .empty-state { color: #9d9b91; }
+      :root[data-theme="dark"] .custom-card { background: linear-gradient(145deg, rgba(58,56,51,.92), rgba(52,49,42,.72)); }
+      :root[data-theme="dark"] .custom-head p { color: #9d9b91; }
+      :root[data-theme="dark"] .custom-count { background: rgba(255,255,255,.08); color: #b5b3ab; }
+      :root[data-theme="dark"] .custom-field { color: #9d9b91; }
+      :root[data-theme="dark"] .custom-field input, :root[data-theme="dark"] .custom-field select { border-color: #4a4842; background: #33322e; }
+      :root[data-theme="dark"] .custom-field input::placeholder { color: #8f8d84; }
+      :root[data-theme="dark"] .custom-meta { border-top-color: #3a3833; color: #9d9b91; }
+      :root[data-theme="dark"] .custom-row { border-color: #3a3833; background: rgba(255,255,255,.05); }
+      :root[data-theme="dark"] .custom-main small { color: #8f8d84; }
+      :root[data-theme="dark"] .custom-row.done .custom-main span { color: #6e6c65; }
+      :root[data-theme="dark"] .custom-delete { color: #9d9b91; }
+      :root[data-theme="dark"] .custom-empty { border-color: #4a4842; color: #9d9b91; }
+      :root[data-theme="dark"] .resource-list { border-color: #3a3833; background-color: rgba(255,255,255,.03); background-image: radial-gradient(circle, rgba(255,255,255,.1) 1px, transparent 1.2px); }
+      :root[data-theme="dark"] .resource-item { border-color: #3a3833; background: rgba(48,47,43,.94); box-shadow: 0 9px 18px rgba(0,0,0,.3); }
+      :root[data-theme="dark"] .resource-item p { color: #9d9b91; }
+      :root[data-theme="dark"] .resource-item a { color: #d5d3cb; }
+      :root[data-theme="dark"] .snap-toggle { border-color: #4a4842; color: #b5b3ab; background: rgba(255,255,255,.05); }
+      :root[data-theme="dark"] .color-input { border-color: #4a4842; }
+      :root[data-theme="dark"] .footer-row { color: #9d9b91; }
+      :root[data-theme="dark"] .mini-button { border-color: #4a4842; color: #b5b3ab; background: rgba(255,255,255,.05); }
+      :root[data-theme="dark"] .mini-button:hover { background: rgba(255,255,255,.12); }
+      :root[data-theme="dark"] .auth-card { background: rgba(43,42,38,.94); }
+      :root[data-theme="dark"] .auth-form label { color: #b5b3ab; }
+      :root[data-theme="dark"] .auth-form input { border-color: #4a4842; background: #33322e; }
+      :root[data-theme="dark"] .auth-switch { color: #d5d3cb; }
+      :root[data-theme="dark"] .signed-in { border-color: #4a4842; color: #b5b3ab; background: rgba(43,42,38,.94); }
+
+      /* Auto theme icon: a small sun with a crescent moon beside it, drawn in
+         CSS (no icon library). The mask makes the moon a true crescent without
+         needing to match the button's background. */
+      [data-theme-toggle] { position: relative; }
+      [data-theme-toggle][data-theme-icon="auto"]::before,
+      [data-theme-toggle][data-theme-icon="auto"]::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+      /* Sun (left): disc with four ray stubs. */
+      [data-theme-toggle][data-theme-icon="auto"]::before {
+        left: calc(50% - 8px);
+        background: currentColor;
+        box-shadow:
+          0 -4px 0 -2.5px currentColor,
+          0 4px 0 -2.5px currentColor,
+          -4px 0 0 -2.5px currentColor,
+          4px 0 0 -2.5px currentColor;
+      }
+      /* Moon (right): crescent cut out of a disc with a mask. */
+      [data-theme-toggle][data-theme-icon="auto"]::after {
+        left: 50%;
+        background: currentColor;
+        -webkit-mask: radial-gradient(circle at 35% 50%, transparent 3.5px, #000 4px);
+        mask: radial-gradient(circle at 35% 50%, transparent 3.5px, #000 4px);
+      }
+    </style>
+    <script src="./theme.js"></script>
   </head>
   <body>
     <section class="auth-screen" id="authScreen" aria-labelledby="authTitle">
@@ -190,7 +328,7 @@
         <nav class="main-nav" aria-label="Dashboard routes">
           <button class="nav-button active" data-scroll="overview">Dashboard</button><button class="nav-button" data-scroll="python">Python</button><button class="nav-button" data-scroll="java">Java</button><button class="nav-button" data-scroll="os">OS / Linux</button><button class="nav-button" data-scroll="campusops">CampusOps</button><button class="nav-button" data-scroll="resources">Resources</button><button class="nav-button" data-scroll="custom">Custom</button>
         </nav>
-        <div class="top-actions"><button class="icon-button" id="showOpen" title="Show open tasks">◌</button><button class="icon-button" title="Local progress storage">⌁</button></div>
+        <div class="top-actions"><button class="icon-button" id="showOpen" title="Show open tasks">◌</button><button class="icon-button" title="Local progress storage">⌁</button><button class="icon-button" data-theme-toggle type="button" aria-label="Switch to dark theme" title="Switch to dark theme">☾</button></div>
       </header>
 
       <section class="intro" id="overview">
@@ -216,7 +354,7 @@
 
       <section class="card workbench" id="workbench"><div class="workbench-top"><div class="workbench-title"><h2>Study checkpoints</h2><span id="workbenchCount">0 completed</span></div><div class="workbench-controls"><button class="filter active" data-filter="all">All</button><button class="filter" data-filter="open">Open</button><button class="filter" data-filter="done">Done</button><input class="search" id="search" type="search" placeholder="Find a checkpoint" aria-label="Find a checkpoint" /></div></div><div class="checkpoints" id="checkpoints"></div><div class="empty-state" id="emptyState">No checkpoints match this view. Try another filter or search phrase.</div><div class="footer-row"><span>Progress is saved in this browser. Export a copy before switching devices.</span><div class="data-actions"><button class="mini-button" id="exportData">Export progress</button><button class="mini-button danger" id="resetData">Reset safely</button></div></div></section>
 
-      <section class="card resource-card" id="resources"><div class="custom-head"><div><h2>Resource canvas</h2><p>Save a course, repository, article, app, or video, then drag its card or move it with the arrow keys to organize your learning map.</p></div><div class="resource-head-actions"><span class="custom-count" id="resourceCount">0 saved</span><label class="snap-toggle" title="Align cards to the 18px canvas grid"><input id="resourceSnap" type="checkbox" /><span>Snap to grid</span></label></div><form class="custom-form resource-form" id="resourceForm"><label class="custom-field"><span>Name</span><input id="resourceName" type="text" maxlength="80" placeholder="e.g. 30 Days of Python" required /></label><label class="custom-field"><span>Link</span><input id="resourceUrl" type="url" maxlength="500" placeholder="https://github.com/..." required /></label><label class="custom-field"><span>Short note</span><input id="resourceDescription" type="text" maxlength="160" placeholder="What will this help you learn?" /></label><label class="custom-field"><span>Color</span><input id="resourceColor" type="color" value="#f6ce50" class="color-input" title="Choose a color for this resource" /></label><button class="add-button" type="submit">+ Save resource</button></form><div class="resource-list" id="resourceList"><div class="custom-empty resource-empty" id="resourceEmpty">No resources saved yet. Add the next useful link you find.</div></div></section>
+      <section class="card resource-card" id="resources"><div class="custom-head"><div><h2>Resource canvas</h2><p>Save a course, repository, article, app, or video, then drag its card or move it with the arrow keys to organize your learning map.</p></div><div class="resource-head-actions"><span class="custom-count" id="resourceCount">0 saved</span><label class="snap-toggle" title="Align cards to the 18px canvas grid"><input id="resourceSnap" type="checkbox" /><span>Snap to grid</span></label></div></div><form class="custom-form resource-form" id="resourceForm"><label class="custom-field"><span>Name</span><input id="resourceName" type="text" maxlength="80" placeholder="e.g. 30 Days of Python" required /></label><label class="custom-field"><span>Link</span><input id="resourceUrl" type="url" maxlength="500" placeholder="https://github.com/..." required /></label><label class="custom-field"><span>Short note</span><input id="resourceDescription" type="text" maxlength="160" placeholder="What will this help you learn?" /></label><label class="custom-field"><span>Color</span><input id="resourceColor" type="color" value="#f6ce50" class="color-input" title="Choose a color for this resource" /></label><button class="add-button" type="submit">+ Save resource</button></form><div class="resource-list" id="resourceList"><div class="custom-empty resource-empty" id="resourceEmpty">No resources saved yet. Add the next useful link you find.</div></div></section>
     </main></div>
     <div class="cookie-banner" id="cookieBanner" role="region" aria-label="Cookie consent" hidden>
       <p>SEM ASSIST stores your study progress and sign-in session locally in this browser — we don't use tracking cookies.</p>
