@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { bootApp, byId, stored, text } from "./helpers";
 
 describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
@@ -73,6 +73,119 @@ describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
     expect(text(byId(doc, "customTaskCount"))).toBe("0 open · 1 total");
     expect(text(byId(doc, "statProof"))).toBe("10");
     expect(text(byId(doc, "statStreak"))).toBe("1");
+  });
+
+  it("persists an optional due date and highlights overdue custom tasks", async () => {
+    const { app, doc } = await bootApp();
+    const today = (app as { todayKey(): string }).todayKey();
+    const input = doc.getElementById("customTaskInput") as HTMLInputElement;
+    const due = doc.getElementById("customDue") as HTMLInputElement;
+    const form = doc.getElementById("customForm")!;
+    const submit = () =>
+      form.dispatchEvent(
+        new doc.defaultView!.Event("submit", {
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+
+    // Past due date: the row is marked overdue with a pill, and dueDate persists.
+    input.value = "Finish lab report";
+    due.value = "2020-01-01";
+    submit();
+    let row = doc.querySelector(
+      "#customTasks .custom-row"
+    ) as HTMLElement;
+    expect(row.classList.contains("overdue")).toBe(true);
+    expect(row.textContent).toContain("Overdue");
+    expect(
+      (stored(doc)!.customTasks as Array<Record<string, unknown>>)[0]
+        .dueDate
+    ).toBe("2020-01-01");
+
+    // Due today: shown as "Due today", not overdue.
+    input.value = "Review notes";
+    due.value = today;
+    submit();
+    row = doc.querySelectorAll("#customTasks .custom-row")[1] as HTMLElement;
+    expect(row.classList.contains("overdue")).toBe(false);
+    expect(row.textContent).toContain("Due today");
+
+    // Future due date: not overdue.
+    input.value = "Plan Java week";
+    due.value = "2099-01-01";
+    submit();
+    row = doc.querySelectorAll("#customTasks .custom-row")[2] as HTMLElement;
+    expect(row.classList.contains("overdue")).toBe(false);
+    expect(row.textContent).toContain("Due Jan 1");
+
+    // Completing an overdue task clears the overdue state.
+    doc
+      .querySelector<HTMLInputElement>("#customTasks [data-custom-check]")
+      .click();
+    row = doc.querySelector("#customTasks .custom-row") as HTMLElement;
+    expect(row.classList.contains("done")).toBe(true);
+    expect(row.classList.contains("overdue")).toBe(false);
+
+    // No due date: keeps the legacy "added" meta.
+    input.value = "No deadline";
+    due.value = "";
+    submit();
+    row = doc.querySelectorAll("#customTasks .custom-row")[3] as HTMLElement;
+    expect(row.classList.contains("overdue")).toBe(false);
+    expect(row.textContent).toContain("added");
+    expect(
+      (stored(doc)!.customTasks as Array<Record<string, unknown>>)[3].dueDate
+    ).toBeNull();
+  });
+
+  it("logs focus minutes into state, the weekly chart, and today's total", async () => {
+    const { app, doc } = await bootApp();
+    const today = (app as { todayKey(): string }).todayKey();
+
+    // Fake only the interval so real dates keep flowing.
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    (doc.getElementById("timerStart") as HTMLButtonElement).click();
+    vi.advanceTimersByTime(60_000); // one whole minute of focus
+    (doc.getElementById("timerPause") as HTMLButtonElement).click();
+    vi.useRealTimers();
+
+    const saved = stored(doc)!;
+    const focus = saved.focus as {
+      days: Record<string, number>;
+      sessions: Array<{ date: string; minutes: number }>;
+    };
+    expect(focus.days[today]).toBe(1);
+    expect(focus.sessions).toEqual([{ date: today, minutes: 1 }]);
+    expect(text(byId(doc, "focusToday"))).toBe("1m today");
+    expect(text(byId(doc, "weeklyFocusNote"))).toContain("1m focused");
+    expect(text(byId(doc, "calendarSummary"))).toContain("focused");
+    expect(text(byId(doc, "timerText"))).toBe("01:00");
+
+    const todayColumn = [...doc.querySelectorAll("#focusBars .weekly-column")].find(
+      column => column.classList.contains("today")
+    );
+    expect(todayColumn?.querySelector(".weekly-value")?.textContent).toBe("1");
+  });
+
+  it("records focus when a running timer is reset", async () => {
+    const { app, doc } = await bootApp();
+    const today = (app as { todayKey(): string }).todayKey();
+
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    (doc.getElementById("timerStart") as HTMLButtonElement).click();
+    vi.advanceTimersByTime(90_000);
+    (doc.getElementById("timerReset") as HTMLButtonElement).click();
+    vi.useRealTimers();
+
+    const focus = (stored(doc)!.focus as {
+      days: Record<string, number>;
+      sessions: Array<{ date: string; minutes: number }>;
+    });
+    // 90 seconds rounds to 2 committed minutes, then reset closes the session.
+    expect(focus.days[today]).toBe(2);
+    expect(focus.sessions).toEqual([{ date: today, minutes: 2 }]);
+    expect(text(byId(doc, "timerText"))).toBe("00:00");
   });
 
   it("persists a completed checkpoint across a simulated reload", async () => {

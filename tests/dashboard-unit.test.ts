@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   STORAGE_KEY,
+  addFocusMinutes,
   dateKey,
   defaultState,
   escapeHtml,
+  formatMinutes,
   getStats,
   loadState,
   migrateLegacy,
@@ -157,12 +159,63 @@ describe("normalizeState", () => {
     expect(state.customTasks).toEqual([]);
     expect(state.resources).toEqual([]);
     expect(typeof state.activity).toBe("object");
+    expect(state.focus).toEqual({ days: {}, sessions: [] });
   });
 
   it("preserves provided arrays", () => {
     const state = normalizeState({ customTasks: [1], resources: [2] } as never);
     expect(state.customTasks).toHaveLength(1);
     expect(state.resources).toHaveLength(1);
+  });
+
+  it("preserves provided focus data", () => {
+    const state = normalizeState({
+      focus: {
+        days: { "2026-09-06": 25 },
+        sessions: [{ date: "2026-09-06", minutes: 25 }],
+      },
+    } as never);
+    expect(state.focus.days["2026-09-06"]).toBe(25);
+    expect(state.focus.sessions).toHaveLength(1);
+  });
+});
+
+describe("formatMinutes", () => {
+  it("formats minutes compactly", () => {
+    expect(formatMinutes(0)).toBe("0m");
+    expect(formatMinutes(45)).toBe("45m");
+    expect(formatMinutes(60)).toBe("1h");
+    expect(formatMinutes(90)).toBe("1h 30m");
+    expect(formatMinutes(125)).toBe("2h 5m");
+    expect(formatMinutes(-5)).toBe("0m");
+  });
+});
+
+describe("addFocusMinutes", () => {
+  it("accumulates minutes per day and keeps sessions", () => {
+    const state = defaultState();
+    addFocusMinutes(state, "2026-09-06", 25);
+    addFocusMinutes(state, "2026-09-06", 35);
+    addFocusMinutes(state, "2026-09-05", 60);
+    expect(state.focus.days).toEqual({
+      "2026-09-06": 60,
+      "2026-09-05": 60,
+    });
+    expect(state.focus.sessions).toEqual([]);
+  });
+
+  it("handles legacy state without a focus field", () => {
+    const state = { completed: {} } as never;
+    addFocusMinutes(state, "2026-09-06", 10);
+    expect(state.focus.days["2026-09-06"]).toBe(10);
+    expect(state.focus.sessions).toEqual([]);
+  });
+
+  it("ignores zero or negative amounts", () => {
+    const state = defaultState();
+    addFocusMinutes(state, "2026-09-06", 0);
+    addFocusMinutes(state, "2026-09-06", -5);
+    expect(state.focus.days).toEqual({});
   });
 });
 

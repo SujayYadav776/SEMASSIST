@@ -373,6 +373,7 @@ async function ensureSupabase() {
 }
 let activeFilter = "all";
 let focusSeconds = 0;
+let focusCommitted = 0;
 let timerId = null;
 let currentState = null;
 let currentUser = null;
@@ -393,6 +394,7 @@ function defaultState() {
     activity: {},
     customTasks: [],
     resources: [],
+    focus: { days: {}, sessions: [] },
   };
 }
 function migrateLegacy(old) {
@@ -425,7 +427,7 @@ function migrateLegacy(old) {
     ([date, count]) =>
       (activity[date] = count === true ? 1 : Number(count) || 0)
   );
-  return { completed, completedAt, activity, customTasks: [], resources: [] };
+  return { completed, completedAt, activity, customTasks: [], resources: [], focus: { days: {}, sessions: [] } };
 }
 function normalizeState(state) {
   return {
@@ -433,6 +435,15 @@ function normalizeState(state) {
     ...state,
     customTasks: Array.isArray(state?.customTasks) ? state.customTasks : [],
     resources: Array.isArray(state?.resources) ? state.resources : [],
+    focus: {
+      days:
+        state?.focus && typeof state.focus.days === "object" && state.focus.days !== null
+          ? state.focus.days
+          : {},
+      sessions: Array.isArray(state?.focus?.sessions)
+        ? state.focus.sessions
+        : [],
+    },
   };
 }
 function loadLocalState() {
@@ -668,6 +679,79 @@ function renderWeeklyProgress(state) {
   document.getElementById("weeklyNote").textContent = total
     ? `${total} completion${total === 1 ? "" : "s"} recorded since Monday.`
     : "Your week is ready for its first checkpoint.";
+  renderFocusTotals(state);
+}
+function formatMinutes(minutes) {
+  const total = Math.max(0, Math.round(Number(minutes) || 0));
+  if (total < 60) return `${total}m`;
+  const hours = Math.floor(total / 60);
+  const rest = total % 60;
+  return rest ? `${hours}h ${rest}m` : `${hours}h`;
+}
+function addFocusMinutes(state, date, minutes) {
+  const amount = Math.max(0, Math.round(Number(minutes) || 0));
+  if (!amount) return state;
+  const days =
+    state.focus && typeof state.focus.days === "object"
+      ? state.focus.days
+      : {};
+  days[date] = (Number(days[date]) || 0) + amount;
+  state.focus = {
+    days,
+    sessions: Array.isArray(state.focus?.sessions)
+      ? state.focus.sessions
+      : [],
+  };
+  return state;
+}
+function renderFocusTotals(state) {
+  const days =
+    state.focus && typeof state.focus.days === "object"
+      ? state.focus.days
+      : {};
+  const todayEl = document.getElementById("focusToday");
+  if (todayEl)
+    todayEl.textContent = `${formatMinutes(Number(days[todayKey()]) || 0)} today`;
+  const chart = document.getElementById("focusBars");
+  if (!chart) return;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const mondayOffset = (today.getDay() + 6) % 7;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - mondayOffset);
+  const minutes = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(monday);
+    day.setDate(monday.getDate() + index);
+    return Number(days[dateKey(day)]) || 0;
+  });
+  const weekTotal = minutes.reduce((sum, count) => sum + count, 0);
+  const peak = Math.max(...minutes, 1);
+  chart.innerHTML = "";
+  minutes.forEach((count, index) => {
+    const day = new Date(monday);
+    day.setDate(monday.getDate() + index);
+    const column = document.createElement("div");
+    const isToday = dateKey(day) === todayKey();
+    column.className = `weekly-column${isToday ? " today" : ""}${count ? " has-progress" : ""}`;
+    column.title = `${WEEKDAY_NAMES[index]}: ${count} focused ${count === 1 ? "minute" : "minutes"}`;
+    const value = document.createElement("span");
+    value.className = `weekly-value${count ? " has-progress" : ""}`;
+    value.textContent = count || "–";
+    const rail = document.createElement("span");
+    rail.className = "bar-rail";
+    const bar = document.createElement("span");
+    bar.className = "bar-stick";
+    if (count) bar.style.background = "var(--yellow)";
+    bar.style.height = `${count ? Math.max(18, Math.round((count / peak) * 100)) : 4}%`;
+    rail.appendChild(bar);
+    column.append(value, rail);
+    chart.appendChild(column);
+  });
+  const note = document.getElementById("weeklyFocusNote");
+  if (note)
+    note.textContent = weekTotal
+      ? `${formatMinutes(weekTotal)} focused this week.`
+      : "No focus time recorded this week.";
 }
 function updateSummary(state) {
   const stats = getStats(state);
@@ -869,10 +953,19 @@ function renderResources(state) {
     })
   );
 }
+function formatDueDate(value) {
+  const [year, month, day] = String(value).split("-").map(Number);
+  if (!year || !month || !day) return String(value);
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
 function renderCustomTasks(state) {
   const list = document.getElementById("customTasks");
   const empty = document.getElementById("customEmpty");
   const tasks = Array.isArray(state.customTasks) ? state.customTasks : [];
+  const today = todayKey();
   empty.hidden = tasks.length > 0;
   list.innerHTML = tasks
     .map(task => {
@@ -880,11 +973,18 @@ function renderCustomTasks(state) {
       const checkedAttr = task.completed ? "checked" : "";
       const cadenceLabel = task.cadence === "today" ? "Today" : "This week";
       const title = escapeHtml(task.title);
+      const dueDate = task.dueDate ? String(task.dueDate) : null;
+      const overdue = !task.completed && dueDate !== null && dueDate < today;
+      const meta =
+        dueDate === null
+          ? `added ${task.createdAt}`
+          : `Due ${dueDate === today ? "today" : formatDueDate(dueDate)}`;
+      const overduePill = overdue ? '<em class="due-pill">Overdue</em>' : "";
       return (
-        `<div class="custom-row ${doneClass}">` +
+        `<div class="custom-row ${doneClass}${overdue ? " overdue" : ""}">` +
         `<label class="custom-main">` +
         `<input class="check" type="checkbox" ${checkedAttr} data-custom-check="${task.id}" />` +
-        `<span>${title}<small>${cadenceLabel} · added ${task.createdAt}</small></span>` +
+        `<span>${title}<small>${cadenceLabel} · ${meta}${overduePill}</small></span>` +
         `</label>` +
         `<button class="custom-delete" type="button" title="Delete task" aria-label="Delete ${title}" data-custom-delete="${task.id}">×</button>` +
         `</div>`
@@ -934,9 +1034,27 @@ function renderActivity(state) {
     dot.title = `${key}: ${count} task ${count === 1 ? "completion" : "completions"}`;
     grid.appendChild(dot);
   }
-  document.getElementById("calendarSummary").textContent = active
+  updateCalendarSummary(state);
+}
+function updateCalendarSummary(state) {
+  let active = 0,
+    total = 0;
+  Object.values(state.activity || {}).forEach(value => {
+    const n = Number(value) || 0;
+    if (n) {
+      active++;
+      total += n;
+    }
+  });
+  const focusTotal = Object.values(
+    state.focus && typeof state.focus.days === "object" ? state.focus.days : {}
+  ).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const summary = active
     ? `${active} active days · ${total} completions`
     : "No activity recorded yet.";
+  document.getElementById("calendarSummary").textContent = focusTotal
+    ? `${summary} · ${formatMinutes(focusTotal)} focused`
+    : summary;
 }
 function toggleTask(id, trackId, checked) {
   const state = loadState();
@@ -1001,6 +1119,7 @@ function addCustomTask(event) {
     id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     title,
     cadence: document.getElementById("customCadence").value,
+    dueDate: document.getElementById("customDue").value || null,
     createdAt: todayKey(),
     completed: false,
     completedAt: null,
@@ -1066,6 +1185,26 @@ function applyFilters() {
     if (show) visible++;
   });
   document.getElementById("emptyState").classList.toggle("show", visible === 0);
+}
+function commitFocusRun() {
+  const delta = Math.round(focusSeconds / 60) - focusCommitted;
+  if (delta <= 0) return;
+  const state = loadState();
+  addFocusMinutes(state, todayKey(), delta);
+  focusCommitted += delta;
+  saveState(state);
+  renderFocusTotals(state);
+  updateCalendarSummary(state);
+}
+function endFocusRun() {
+  commitFocusRun();
+  const minutes = focusCommitted;
+  if (minutes > 0) {
+    const state = loadState();
+    state.focus.sessions.push({ date: todayKey(), minutes });
+    saveState(state);
+  }
+  focusCommitted = 0;
 }
 function formatTime(seconds) {
   const minutes = Math.floor(seconds / 60);
@@ -1220,13 +1359,18 @@ async function init() {
       timerId = setInterval(() => {
         focusSeconds++;
         setTimer();
+        if (focusSeconds % 60 === 0) commitFocusRun();
       }, 1000);
   });
   document.getElementById("timerPause").addEventListener("click", () => {
     clearInterval(timerId);
     timerId = null;
+    endFocusRun();
   });
   document.getElementById("timerReset").addEventListener("click", () => {
+    clearInterval(timerId);
+    timerId = null;
+    endFocusRun();
     focusSeconds = 0;
     setTimer();
   });
@@ -1324,4 +1468,6 @@ export {
   setSupabaseClientFactory,
   keepaliveFlush,
   applyFilters,
+  formatMinutes,
+  addFocusMinutes,
 };
