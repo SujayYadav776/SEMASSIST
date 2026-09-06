@@ -141,7 +141,7 @@ pnpm check
 pnpm build
 ```
 
-At the time of this handoff, `node_modules` was absent. Attempting `pnpm check` / `pnpm build` tried to reach the package registry but failed due to sandbox/network access, so full typecheck/build has not been completed in this environment.
+Dependencies are installed, so `pnpm test` and `pnpm build` run locally and pass.
 
 The inline module script in `study-dashboard.html` has been syntax-checked using:
 
