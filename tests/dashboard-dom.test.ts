@@ -377,6 +377,98 @@ describe("cookie consent banner", () => {
     expect(byId(doc, "cookieBanner")!.hasAttribute("hidden")).toBe(true);
   });
 
+  it("expands cards with matches while searching, then collapses when cleared", async () => {
+    const { doc } = await bootApp();
+    const search = doc.getElementById("search") as HTMLInputElement;
+    const cards = () =>
+      [...doc.querySelectorAll<HTMLElement>("#checkpoints .track-card")];
+
+    // Idle: collapsed tiles, nothing force-expanded.
+    expect(cards().length).toBe(6);
+    expect(cards().every(card => !card.classList.contains("expanded"))).toBe(
+      true
+    );
+
+    // Searching expands every card that still has a visible match.
+    search.value = "linked list";
+    search.dispatchEvent(
+      new doc.defaultView!.Event("input", { bubbles: true })
+    );
+    const expanded = cards().filter(card =>
+      card.classList.contains("expanded")
+    );
+    expect(expanded.length).toBeGreaterThan(0);
+    expect(
+      expanded.every(
+        card =>
+          card.querySelectorAll(".task-row:not(.hidden)").length > 0
+      )
+    ).toBe(true);
+
+    // Clearing the search restores the collapsed tile state.
+    search.value = "";
+    search.dispatchEvent(
+      new doc.defaultView!.Event("input", { bubbles: true })
+    );
+    expect(cards().every(card => !card.classList.contains("expanded"))).toBe(
+      true
+    );
+    expect(
+      doc.querySelectorAll<HTMLElement>("#checkpoints .task-row.hidden").length
+    ).toBe(0);
+  });
+
+  it("toggles a tile open on header click and keeps it open when ticking tasks", async () => {
+    const { doc } = await bootApp();
+    const java = doc.getElementById("java")!;
+    const click = (el: Element) =>
+      el.dispatchEvent(
+        new doc.defaultView!.MouseEvent("click", { bubbles: true })
+      );
+
+    expect(java.classList.contains("open")).toBe(false);
+    // Collapsed lists stay absolutely positioned so closing never reflows the grid.
+    expect(
+      doc.defaultView!.getComputedStyle(java.querySelector(".task-list")!)
+        .position
+    ).toBe("absolute");
+    click(java.querySelector(".track-head")!);
+    expect(java.classList.contains("open")).toBe(true);
+    expect(java.getAttribute("aria-expanded")).toBe("true");
+
+    // Clicking the roadmap link must not toggle the tile.
+    click(java.querySelector(".source-link")!);
+    expect(java.classList.contains("open")).toBe(true);
+
+    // Ticking a task re-renders the cards but keeps the tile open.
+    (java.querySelector(".check") as HTMLInputElement).click();
+    expect(doc.getElementById("java")!.classList.contains("open")).toBe(
+      true
+    );
+
+    // Clicking inside the task list does not collapse the tile.
+    click(doc.getElementById("java")!.querySelector(".task-row")!);
+    expect(doc.getElementById("java")!.classList.contains("open")).toBe(
+      true
+    );
+
+    // Enter on the focused header toggles it closed (keyboard parity).
+    const head = doc.getElementById("java")!.querySelector(".track-head")!;
+    (head as HTMLElement).focus();
+    head.dispatchEvent(
+      new doc.defaultView!.KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+      })
+    );
+    expect(doc.getElementById("java")!.classList.contains("open")).toBe(
+      false
+    );
+    expect(doc.getElementById("java")!.getAttribute("aria-expanded")).toBe(
+      "false"
+    );
+  });
+
   it("gives glyph-only controls accessible names", async () => {
     const { doc } = await bootApp();
     expect(byId(doc, "timerStart")!.getAttribute("aria-label")).toBe(
@@ -580,5 +672,367 @@ describe("resource canvas keyboard positioning", () => {
     const resource = (saved.resources as Array<Record<string, unknown>>)[0];
     expect(resource.x).toBe(54);
     expect(resource.y).toBe(18);
+  });
+});
+
+describe("checkpoint queue mission card", () => {
+  it("lists the next three unchecked checkpoints and verifies one on click", async () => {
+    const { doc } = await bootApp();
+    const rows = () =>
+      [...doc.querySelectorAll<HTMLElement>("#missionQueue .queue-row")];
+
+    expect(text(byId(doc, "deviceProgress"))).toBe("0 / 76");
+    expect(rows().map(row => row.dataset.qid)).toEqual([
+      "python-1",
+      "python-2",
+      "python-3",
+    ]);
+    expect(rows()[0].querySelector(".queue-main small")!.textContent).toContain(
+      "Python · BASICS"
+    );
+
+    rows()[0].click();
+    expect(text(byId(doc, "workbenchCount"))).toBe("1 completed");
+    expect(text(byId(doc, "focusCount"))).toBe("1 / 12");
+    // The queue advances: the verified step is replaced by the next one.
+    expect(rows().map(row => row.dataset.qid)).toEqual([
+      "python-2",
+      "python-3",
+      "python-4",
+    ]);
+    expect((stored(doc)!.completed as Record<string, boolean>)["python-1"]).toBe(
+      true
+    );
+  });
+
+  it("focus picker narrows the queue to one track and persists the choice", async () => {
+    const { doc } = await bootApp();
+    const select = doc.getElementById("queueFocus") as HTMLSelectElement;
+    expect([...select.options].map(option => option.value)).toEqual([
+      "all",
+      "python",
+      "python30",
+      "java",
+      "os",
+      "algorithms",
+      "campusops",
+    ]);
+
+    select.value = "java";
+    select.dispatchEvent(
+      new doc.defaultView!.Event("change", { bubbles: true })
+    );
+    const rows = () =>
+      [...doc.querySelectorAll<HTMLElement>("#missionQueue .queue-row")];
+    expect(rows().map(row => row.dataset.qid)).toEqual([
+      "java-1",
+      "java-2",
+      "java-3",
+    ]);
+    expect(rows()[0].querySelector(".queue-main small")!.textContent).toContain(
+      "Java · BASICS"
+    );
+    expect((stored(doc) as { queueFocus: string }).queueFocus).toBe("java");
+
+    rows()[0].click();
+    expect(rows().map(row => row.dataset.qid)).toEqual([
+      "java-2",
+      "java-3",
+      "java-4",
+    ]);
+    expect(text(byId(doc, "statProof"))).toBe("10");
+  });
+
+  it("shows an empty message when the focused track is fully verified", async () => {
+    const completed: Record<string, boolean> = {};
+    for (let index = 1; index <= 12; index++) completed[`java-${index}`] = true;
+    const { doc } = await bootApp({
+      preSeed: {
+        "aster-study-dashboard-v3": JSON.stringify({
+          completed,
+          completedAt: {},
+          activity: {},
+          customTasks: [],
+          resources: [],
+          focus: { days: {}, sessions: [] },
+        }),
+      },
+    });
+    const select = doc.getElementById("queueFocus") as HTMLSelectElement;
+    select.value = "java";
+    select.dispatchEvent(
+      new doc.defaultView!.Event("change", { bubbles: true })
+    );
+
+    expect(doc.querySelectorAll("#missionQueue .queue-row").length).toBe(0);
+    const empty = doc.querySelector("#missionQueue .queue-empty");
+    expect(empty?.textContent).toContain("fully verified");
+  });
+});
+
+describe("keyboard shortcuts", () => {
+  const key = (doc: Document, keyName: string, target?: Element) =>
+    (target || doc.body).dispatchEvent(
+      new doc.defaultView!.KeyboardEvent("keydown", {
+        key: keyName,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+  const cursor = (doc: Document) =>
+    doc.querySelector<HTMLElement>("#checkpoints .task-row.key-cursor");
+
+  it("slash focuses the search box", async () => {
+    const { doc } = await bootApp();
+    const search = byId(doc, "search") as HTMLInputElement;
+    key(doc, "/");
+    expect(doc.activeElement).toBe(search);
+  });
+
+  it("j walks down the checkpoints, opening the owning tile and collapsing the previous", async () => {
+    const { doc } = await bootApp();
+    key(doc, "j");
+    expect(cursor(doc)?.dataset.taskId).toBe("python-1");
+    expect(doc.getElementById("python")!.classList.contains("open")).toBe(true);
+
+    // python has 12 rows; the 12th j steps into 30 Days of Python.
+    for (let index = 0; index < 11; index++) key(doc, "j");
+    expect(cursor(doc)?.dataset.taskId).toBe("python-12");
+    key(doc, "j");
+    expect(cursor(doc)?.dataset.taskId).toBe("python30-1");
+    expect(doc.getElementById("python30")!.classList.contains("open")).toBe(
+      true
+    );
+    expect(doc.getElementById("python")!.classList.contains("open")).toBe(
+      false
+    );
+  });
+
+  it("k starts at the last row and steps up; the ends clamp", async () => {
+    const { doc } = await bootApp();
+    key(doc, "k");
+    expect(cursor(doc)?.dataset.taskId).toBe("campusops-8");
+    expect(doc.getElementById("campusops")!.classList.contains("open")).toBe(
+      true
+    );
+    key(doc, "k");
+    expect(cursor(doc)?.dataset.taskId).toBe("campusops-7");
+    key(doc, "j");
+    expect(cursor(doc)?.dataset.taskId).toBe("campusops-8");
+  });
+
+  it("space toggles the cursor row and the cursor survives the re-render", async () => {
+    const { doc } = await bootApp();
+    key(doc, "j");
+    key(doc, " ");
+    expect(text(byId(doc, "workbenchCount"))).toBe("1 completed");
+    expect(text(byId(doc, "statProof"))).toBe("10");
+    expect(cursor(doc)?.dataset.taskId).toBe("python-1");
+    expect(cursor(doc)!.classList.contains("done")).toBe(true);
+    expect(doc.getElementById("python")!.classList.contains("open")).toBe(
+      true
+    );
+  });
+
+  it("ignores shortcuts while typing in the search box", async () => {
+    const { doc } = await bootApp();
+    const search = byId(doc, "search") as HTMLInputElement;
+    search.focus();
+    key(doc, "j", search);
+    key(doc, "k", search);
+    expect(cursor(doc)).toBeNull();
+    expect(doc.querySelectorAll(".track-card.open").length).toBe(0);
+    expect(text(byId(doc, "workbenchCount"))).toBe("0 completed");
+  });
+
+  it("t starts and pauses the focus timer", async () => {
+    const { doc } = await bootApp();
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    key(doc, "t");
+    expect(text(byId(doc, "toast"))).toBe("Focus timer running.");
+    key(doc, "t");
+    expect(text(byId(doc, "toast"))).toBe("Focus timer paused.");
+    vi.useRealTimers();
+  });
+});
+
+describe("focus journal", () => {
+  const runMinute = (doc: Document, stop: "pause" | "reset") => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    (doc.getElementById("timerStart") as HTMLButtonElement).click();
+    vi.advanceTimersByTime(60_000);
+    (doc.getElementById(`timer${stop === "pause" ? "Pause" : "Reset"}`) as HTMLButtonElement).click();
+    vi.useRealTimers();
+  };
+
+  it("prompts on stop; saving writes the note and track onto the session, the weekly note, and the calendar story", async () => {
+    const { app, doc } = await bootApp();
+    const today = (app as { todayKey(): string }).todayKey();
+    runMinute(doc, "pause");
+
+    const overlay = byId(doc, "journalOverlay")!;
+    expect(overlay.hasAttribute("hidden")).toBe(false);
+    expect(text(byId(doc, "journalTitle"))).toContain("1m of focus");
+
+    (byId(doc, "journalNote") as HTMLInputElement).value =
+      "Review Java interfaces";
+    (byId(doc, "journalTrack") as HTMLSelectElement).value = "java";
+    byId(doc, "journalNote")!.dispatchEvent(
+      new doc.defaultView!.KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+
+    expect(overlay.hasAttribute("hidden")).toBe(true);
+    const focus = stored(doc)!.focus as {
+      sessions: Array<Record<string, unknown>>;
+    };
+    expect(focus.sessions).toEqual([
+      { date: today, minutes: 1, track: "java", note: "Review Java interfaces" },
+    ]);
+    expect(text(byId(doc, "weeklyFocusNote"))).toBe(
+      "1m focused this week. · Java 1m"
+    );
+  });
+
+  it("journaled days tell their story on the calendar tooltip", async () => {
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const sunday = new Date();
+    sunday.setDate(sunday.getDate() - sunday.getDay());
+    const sundayKey = `${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())}`;
+    const { doc } = await bootApp({
+      preSeed: {
+        "aster-study-dashboard-v3": JSON.stringify({
+          completed: {},
+          completedAt: {},
+          activity: {},
+          customTasks: [],
+          resources: [],
+          focus: {
+            days: {},
+            sessions: [
+              {
+                date: sundayKey,
+                minutes: 25,
+                track: "python",
+                note: "Reviewed list patterns",
+              },
+            ],
+          },
+        }),
+      },
+    });
+    const dots = [...doc.querySelectorAll<HTMLElement>("#activityCalendar i")];
+    const dot = dots.find(element => element.title.startsWith(sundayKey + ":"));
+    expect(dot).toBeTruthy();
+    expect(dot?.title).toContain("25m focused");
+    expect(dot?.title).toContain("Python: Reviewed list patterns");
+  });
+
+  it("Escape skips the prompt and leaves the plain untagged session", async () => {
+    const { app, doc } = await bootApp();
+    const today = (app as { todayKey(): string }).todayKey();
+    runMinute(doc, "reset");
+
+    expect(byId(doc, "journalOverlay")!.hasAttribute("hidden")).toBe(false);
+    byId(doc, "journalOverlay")!.dispatchEvent(
+      new doc.defaultView!.KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    expect(byId(doc, "journalOverlay")!.hasAttribute("hidden")).toBe(true);
+    const focus = stored(doc)!.focus as {
+      sessions: Array<Record<string, unknown>>;
+    };
+    expect(focus.sessions).toEqual([{ date: today, minutes: 1 }]);
+    expect(text(byId(doc, "weeklyFocusNote"))).toBe(
+      "1m focused this week."
+    );
+  });
+
+  it("Solid and Redo drive the review queue", async () => {
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const shift = (days: number) => {
+      const date = new Date();
+      date.setDate(date.getDate() - days);
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    };
+    const { app, doc } = await bootApp({
+      preSeed: {
+        "aster-study-dashboard-v3": JSON.stringify({
+          completed: { "python-1": true, "python-2": true },
+          completedAt: { "python-1": shift(3), "python-2": shift(20) },
+          activity: {},
+          customTasks: [],
+          resources: [],
+          focus: { days: {}, sessions: [] },
+        }),
+      },
+    });
+    const today = (app as { todayKey(): string }).todayKey();
+    const rows = () =>
+      [...doc.querySelectorAll<HTMLElement>("#reviewQueue .review-row")];
+
+    expect(text(byId(doc, "reviewCount"))).toBe("2 due");
+    expect(rows()).toHaveLength(2);
+    expect(rows()[0].querySelector("small")!.textContent).toContain(
+      "due 3d after"
+    );
+    expect(rows()[0].querySelector("b")!.textContent).toContain(
+      "Learn the basics"
+    );
+
+    // Solid on the first row records python-1@3 and drops it from the queue.
+    rows()[0].querySelector<HTMLElement>("[data-review-solid]")!.click();
+    expect(text(byId(doc, "reviewCount"))).toBe("1 due");
+    expect(
+      (stored(doc)!.reviews as Record<string, string>)["python-1@3"]
+    ).toBe(today);
+    expect(rows()[0].querySelector("b")!.textContent).toContain(
+      "Control flow"
+    );
+
+    // Redo resets python-2 to today and clears its review history.
+    rows()[0].querySelector<HTMLElement>("[data-review-redo]")!.click();
+    expect(text(byId(doc, "reviewCount"))).toBe("Nothing due");
+    expect(
+      (stored(doc)!.completedAt as Record<string, string>)["python-2"]
+    ).toBe(today);
+    expect(stored(doc)!.reviews).toEqual({ "python-1@3": today });
+    expect(byId(doc, "reviewEmpty")!.hasAttribute("hidden")).toBe(false);
+  });
+
+  it("opens the semester report overlay with live content and closes it", async () => {
+    const { doc } = await bootApp();
+    const overlay = byId(doc, "reportOverlay")!;
+    expect(overlay.hasAttribute("hidden")).toBe(true);
+
+    byId(doc, "reportOpen")!.click();
+    expect(overlay.hasAttribute("hidden")).toBe(false);
+    const frame = byId(doc, "reportFrame") as HTMLIFrameElement;
+    const srcdoc = frame.getAttribute("srcdoc") || "";
+    expect(srcdoc).toContain("Semester evidence report");
+    expect(srcdoc).toContain(">0/12</strong>"); // python pulse on an empty state
+    expect(srcdoc).toContain("Deep-work ledger");
+
+    byId(doc, "reportClose")!.click();
+    expect(overlay.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("the Skip button closes the prompt without annotating", async () => {
+    const { app, doc } = await bootApp();
+    const today = (app as { todayKey(): string }).todayKey();
+    runMinute(doc, "pause");
+    byId(doc, "journalSkip")!.click();
+
+    expect(byId(doc, "journalOverlay")!.hasAttribute("hidden")).toBe(true);
+    const focus = stored(doc)!.focus as {
+      sessions: Array<Record<string, unknown>>;
+    };
+    expect(focus.sessions).toEqual([{ date: today, minutes: 1 }]);
   });
 });

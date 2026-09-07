@@ -7,9 +7,14 @@ import {
   escapeHtml,
   formatMinutes,
   getStats,
+  buildSemesterReport,
   loadState,
+  markReviewRedo,
+  markReviewSolid,
   migrateLegacy,
+  nextUp,
   normalizeState,
+  reviewDue,
   safeColor,
   saveState,
   streak,
@@ -280,6 +285,149 @@ describe("validResourceUrl", () => {
     expect(validResourceUrl("ftp://example.com")).toBeNull();
     expect(validResourceUrl("not a url")).toBeNull();
     expect(validResourceUrl("")).toBeNull();
+  });
+});
+
+describe("nextUp", () => {
+  it("returns the first three unverified checkpoints in roadmap order", () => {
+    const up = nextUp(defaultState());
+    expect(up.map(item => item.id)).toEqual([
+      "python-1",
+      "python-2",
+      "python-3",
+    ]);
+    expect(up[0].track.name).toBe("Python");
+    expect(up[0].meta).toBe("BASICS");
+  });
+
+  it("skips completed checkpoints and keeps the next three", () => {
+    const state = defaultState();
+    state.completed["python-1"] = true;
+    state.completed["python-2"] = true;
+    expect(nextUp(state).map(item => item.id)).toEqual([
+      "python-3",
+      "python-4",
+      "python-5",
+    ]);
+  });
+
+  it("honors a focus track", () => {
+    const state = defaultState();
+    state.completed["python-1"] = true;
+    const up = nextUp(state, "java");
+    expect(up.map(item => item.id)).toEqual(["java-1", "java-2", "java-3"]);
+    expect(up.every(item => item.track.id === "java")).toBe(true);
+  });
+
+  it("returns an empty list when a focused track is fully verified", () => {
+    const state = defaultState();
+    const java = tracks.find(track => track.id === "java")!;
+    java.tasks.forEach((_, index) => {
+      state.completed[`java-${index + 1}`] = true;
+    });
+    expect(nextUp(state, "java")).toEqual([]);
+    // Other tracks still have work under "all".
+    expect(nextUp(state, "all").length).toBeGreaterThan(0);
+  });
+});
+
+describe("review schedule", () => {
+  const daysAgo = (days: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+    return dateKey(date);
+  };
+
+  it("returns null for unverified or too-fresh checkpoints", () => {
+    const state = defaultState();
+    expect(reviewDue(state, "python-1")).toBeNull();
+    state.completedAt["python-1"] = todayKey();
+    expect(reviewDue(state, "python-1")).toBeNull();
+    state.completedAt["python-1"] = daysAgo(2);
+    expect(reviewDue(state, "python-1")).toBeNull();
+  });
+
+  it("comes due at 3, 7, then 14 days, one milestone at a time", () => {
+    const state = defaultState();
+    state.completedAt["python-2"] = daysAgo(20);
+    expect(reviewDue(state, "python-2")).toBe(3);
+    expect(markReviewSolid(state, "python-2")).toBe(true);
+    expect(reviewDue(state, "python-2")).toBe(7);
+    expect(markReviewSolid(state, "python-2")).toBe(true);
+    expect(reviewDue(state, "python-2")).toBe(14);
+    expect(markReviewSolid(state, "python-2")).toBe(true);
+    expect(reviewDue(state, "python-2")).toBeNull();
+  });
+
+  it("solid review persists the milestone in state.reviews", () => {
+    const state = defaultState();
+    state.completedAt["java-3"] = daysAgo(6);
+    expect(reviewDue(state, "java-3")).toBe(3);
+    markReviewSolid(state, "java-3");
+    expect(state.reviews["java-3@3"]).toBe(todayKey());
+    // 7 days not reached yet → nothing more due.
+    expect(reviewDue(state, "java-3")).toBeNull();
+  });
+
+  it("redo resets the clock to today and clears the milestone history", () => {
+    const state = defaultState();
+    state.completedAt["os-1"] = daysAgo(12);
+    markReviewSolid(state, "os-1");
+    expect(Object.keys(state.reviews)).toHaveLength(1);
+    expect(markReviewRedo(state, "os-1")).toBe(true);
+    expect(state.completedAt["os-1"]).toBe(todayKey());
+    expect(state.reviews).toEqual({});
+    expect(reviewDue(state, "os-1")).toBeNull();
+    // Four days after the redo the fresh 3-day milestone returns.
+    state.completedAt["os-1"] = daysAgo(4);
+    expect(reviewDue(state, "os-1")).toBe(3);
+  });
+});
+
+describe("buildSemesterReport", () => {
+  const daysAgo = (days: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+    return dateKey(date);
+  };
+
+  it("renders stats, per-track pulse, and journaled evidence, escaping user text", () => {
+    const state = defaultState();
+    state.completed["python-1"] = true;
+    state.completedAt["python-1"] = daysAgo(5);
+    state.completed["python-2"] = true;
+    state.completedAt["python-2"] = daysAgo(2);
+    state.activity[daysAgo(2)] = 1;
+    state.focus.days[daysAgo(2)] = 25;
+    state.focus.sessions = [
+      {
+        date: daysAgo(2),
+        minutes: 25,
+        track: "python",
+        note: "Reviewed <b>lists</b> & notes",
+      },
+    ];
+    state.customTasks = [
+      {
+        id: "c1",
+        title: "Prepare Java talk",
+        cadence: "today",
+        completed: true,
+        createdAt: daysAgo(1),
+      },
+    ];
+    state.resources = [{ name: "30 Days of Python" }];
+
+    const html = buildSemesterReport(state);
+    expect(html).toContain("Semester evidence report");
+    expect(html).toContain(">3/77</b>"); // checkpoints stat (incl. custom task)
+    expect(html).toContain(">2/12</strong>"); // python pulse row
+    expect(html).toContain(">0/8</strong>"); // os pulse row untouched
+    expect(html).toContain(">25m</b>"); // focused stat
+    expect(html).toContain("1/1 personal tasks");
+    expect(html).toContain("Reviewed &lt;b&gt;lists&lt;/b&gt; &amp; notes");
+    expect(html).toContain("30 Days of Python");
+    expect(html).toContain("Deep-work ledger");
   });
 });
 

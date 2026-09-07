@@ -5,6 +5,7 @@ const LEGACY_KEY = "mission-cs-study-dashboard-v1";
 const COOKIE_CONSENT_KEY = "semassist-cookie-consent";
 const RESOURCE_SNAP_KEY = "semassist-resource-snap";
 const RESOURCE_SNAP = 18;
+const REVIEW_SCHEDULE = [3, 7, 14];
 const WEEKDAY_NAMES = [
   "Monday",
   "Tuesday",
@@ -375,6 +376,8 @@ let activeFilter = "all";
 let focusSeconds = 0;
 let focusCommitted = 0;
 let timerId = null;
+let keyboardCursorId = null;
+let journalMinutes = 0;
 let currentState = null;
 let currentUser = null;
 let saveTimer = null;
@@ -395,6 +398,8 @@ function defaultState() {
     customTasks: [],
     resources: [],
     focus: { days: {}, sessions: [] },
+    queueFocus: "all",
+    reviews: {},
   };
 }
 function migrateLegacy(old) {
@@ -427,7 +432,7 @@ function migrateLegacy(old) {
     ([date, count]) =>
       (activity[date] = count === true ? 1 : Number(count) || 0)
   );
-  return { completed, completedAt, activity, customTasks: [], resources: [], focus: { days: {}, sessions: [] } };
+  return { completed, completedAt, activity, customTasks: [], resources: [], focus: { days: {}, sessions: [] }, reviews: {} };
 }
 function normalizeState(state) {
   return {
@@ -594,20 +599,84 @@ function streak(activity) {
   }
   return count;
 }
+// Keyboard navigation over the visible checkpoint rows. A single cursor row
+// (id kept across re-renders) is moved with j/k; the owning tile is revealed so
+// the row is actually visible, and Space toggles the cursor row's checkbox.
+function keyboardRows() {
+  return [...document.querySelectorAll("#checkpoints .task-row:not(.hidden)")];
+}
+function keyboardRowById(id) {
+  return keyboardRows().find(row => row.dataset.taskId === id) || null;
+}
+function revealKeyboardRow(row) {
+  const card = row.closest(".track-card");
+  if (!card) return;
+  if (!card.classList.contains("open") && !card.classList.contains("expanded")) {
+    // One keyboard tile at a time: collapse other tiles (never search results)
+    // so their overlay lists do not stack over the one being walked.
+    document.querySelectorAll("#checkpoints .track-card").forEach(other => {
+      if (other !== card && !other.classList.contains("expanded")) {
+        other.classList.remove("open");
+        other.setAttribute("aria-expanded", "false");
+      }
+    });
+    card.classList.add("open");
+    card.setAttribute("aria-expanded", "true");
+  }
+  if (typeof row.scrollIntoView === "function")
+    row.scrollIntoView({ block: "nearest" });
+}
+function applyKeyboardCursor() {
+  document
+    .querySelectorAll(".task-row.key-cursor")
+    .forEach(row => row.classList.remove("key-cursor"));
+  const row = keyboardRowById(keyboardCursorId);
+  if (row) row.classList.add("key-cursor");
+}
+function moveKeyboardCursor(delta) {
+  const rows = keyboardRows();
+  if (!rows.length) return;
+  let index = rows.findIndex(row => row.dataset.taskId === keyboardCursorId);
+  if (index === -1) index = delta > 0 ? -1 : rows.length;
+  const next = rows[Math.max(0, Math.min(rows.length - 1, index + delta))];
+  keyboardCursorId = next.dataset.taskId;
+  revealKeyboardRow(next);
+  applyKeyboardCursor();
+}
+function toggleKeyboardCursor() {
+  const row = keyboardRowById(keyboardCursorId);
+  const check = row && row.querySelector(".check");
+  if (check && !check.disabled) check.click();
+}
+function toggleFocusTimer() {
+  if (timerId) {
+    document.getElementById("timerPause")?.click();
+    showToast("Focus timer paused.");
+  } else {
+    document.getElementById("timerStart")?.click();
+    showToast("Focus timer running.");
+  }
+}
 function renderTracks(state) {
   const container = document.getElementById("checkpoints");
+  // Keep manually opened tiles open across re-renders (e.g. after ticking a task).
+  const openIds = new Set(
+    [...container.querySelectorAll(".track-card.open")].map(card => card.id)
+  );
   container.innerHTML = "";
   const stats = getStats(state);
   tracks.forEach(track => {
     const card = document.createElement("article");
     card.className = "track-card wide";
     card.id = track.id;
+    card.setAttribute("aria-expanded", openIds.has(track.id) ? "true" : "false");
+    if (openIds.has(track.id)) card.classList.add("open");
     card.style.setProperty("--track", track.color);
     const source = track.source
       ? `<a class="source-link" href="${track.source}" target="_blank" rel="noreferrer">${track.sourceLabel || "roadmap.sh ↗"}</a>`
       : "";
     card.innerHTML =
-      `<header class="track-head">` +
+      `<header class="track-head" tabindex="0" title="Click to expand or collapse">` +
       `<div class="track-name"><i></i><div><h3>${track.name}</h3><p>${track.subtitle}</p></div></div>` +
       `<div class="track-progress">` +
       `<span class="mini-orbit" style="--progress:${stats.byTrack[track.id].percent}%"></span>` +
@@ -636,6 +705,7 @@ function renderTracks(state) {
     container.appendChild(card);
   });
   applyFilters();
+  applyKeyboardCursor();
 }
 function renderWeeklyProgress(state) {
   const chart = document.getElementById("studyBars");
@@ -748,10 +818,97 @@ function renderFocusTotals(state) {
     chart.appendChild(column);
   });
   const note = document.getElementById("weeklyFocusNote");
-  if (note)
-    note.textContent = weekTotal
+  if (note) {
+    let text = weekTotal
       ? `${formatMinutes(weekTotal)} focused this week.`
       : "No focus time recorded this week.";
+    // Story per track: sum this week's journaled sessions by their tag.
+    const sessions = Array.isArray(state.focus.sessions)
+      ? state.focus.sessions
+      : [];
+    const mondayKey = dateKey(monday);
+    const todayKeyValue = todayKey();
+    const byTrack = {};
+    sessions.forEach(session => {
+      if (!session || !session.track || !session.date) return;
+      if (session.date < mondayKey || session.date > todayKeyValue) return;
+      const track = tracks.find(item => item.id === session.track);
+      if (!track) return;
+      byTrack[track.id] =
+        (byTrack[track.id] || 0) + (Number(session.minutes) || 0);
+    });
+    const parts = Object.entries(byTrack)
+      .filter(([, minutes]) => minutes > 0)
+      .map(([id, minutes]) => {
+        const track = tracks.find(item => item.id === id);
+        return `${track ? track.name : id} ${formatMinutes(minutes)}`;
+      });
+    if (parts.length) text += ` · ${parts.join(" · ")}`;
+    note.textContent = text;
+  }
+}
+// The next up-to-three unverified checkpoints, in roadmap order. When a focus
+// track is given (any real track id, or "all"), only that track's remaining
+// steps are considered so the day's mission can be chosen rather than narrated.
+function nextUp(state, focus = "all") {
+  const wanted = focus && focus !== "all" ? focus : null;
+  const out = [];
+  for (const track of tracks) {
+    if (wanted && track.id !== wanted) continue;
+    for (let index = 0; index < track.tasks.length; index++) {
+      const id = taskId(track, index);
+      if (state.completed[id]) continue;
+      out.push({
+        id,
+        track: { id: track.id, name: track.name, color: track.color },
+        label: track.tasks[index][0],
+        meta: track.tasks[index][1],
+      });
+      if (out.length === 3) return out;
+    }
+  }
+  return out;
+}
+function renderMissionQueue(state) {
+  const queue = document.getElementById("missionQueue");
+  const select = document.getElementById("queueFocus");
+  if (!queue || !select) return;
+  if (!select.options.length) {
+    const option = (value, label) => {
+      const element = document.createElement("option");
+      element.value = value;
+      element.textContent = label;
+      return element;
+    };
+    select.appendChild(option("all", "All tracks"));
+    tracks.forEach(track =>
+      select.appendChild(option(track.id, track.name))
+    );
+  }
+  const focus =
+    state.queueFocus && tracks.some(track => track.id === state.queueFocus)
+      ? state.queueFocus
+      : "all";
+  select.value = focus;
+  const upcoming = nextUp(state, focus);
+  if (!upcoming.length) {
+    const focusTrack = tracks.find(track => track.id === focus);
+    const message = nextUp(state, "all").length
+      ? `${focusTrack ? focusTrack.name : "This track"} is fully verified — switch focus or enjoy the win.`
+      : "Every checkpoint verified — the roadmap is complete.";
+    queue.innerHTML = `<div class="queue-empty"><i>✓</i><span>${message}</span></div>`;
+    return;
+  }
+  queue.innerHTML = upcoming
+    .map(
+      (item, index) =>
+        `<button type="button" class="queue-row" data-qid="${item.id}" data-track="${item.track.id}" style="--qdot:${item.track.color}" title="Verify in ${item.track.name}">` +
+        `<i>${index + 1}</i>` +
+        `<span class="queue-main"><b>${escapeHtml(item.label)}</b>` +
+        `<small><s></s>${escapeHtml(item.track.name)} · ${escapeHtml(item.meta)}</small></span>` +
+        `</button>`
+    )
+    .join("");
 }
 function updateSummary(state) {
   const stats = getStats(state);
@@ -792,6 +949,8 @@ function updateSummary(state) {
   renderWeeklyProgress(state);
   renderActivity(state);
   renderCustomTasks(state);
+  renderMissionQueue(state);
+  renderReviewQueue(state);
   renderResources(state);
 }
 function escapeHtml(value) {
@@ -1022,6 +1181,25 @@ function renderActivity(state) {
       total += n;
     }
   });
+  const sessionsByDay = {};
+  (Array.isArray(state.focus.sessions) ? state.focus.sessions : []).forEach(
+    session => {
+      if (!session || !session.date) return;
+      sessionsByDay[session.date] = sessionsByDay[session.date] || {
+        minutes: 0,
+        notes: [],
+      };
+      sessionsByDay[session.date].minutes += Number(session.minutes) || 0;
+      if (session.note) {
+        const trackName = session.track
+          ? (tracks.find(track => track.id === session.track) || {}).name
+          : null;
+        sessionsByDay[session.date].notes.push(
+          trackName ? `${trackName}: ${session.note}` : session.note
+        );
+      }
+    }
+  );
   for (let index = 0; index < 364; index++) {
     const date = new Date(start);
     date.setDate(start.getDate() + index);
@@ -1031,7 +1209,13 @@ function renderActivity(state) {
       count === 0 ? 0 : count === 1 ? 1 : count === 2 ? 2 : count <= 4 ? 3 : 4;
     const dot = document.createElement("i");
     dot.className = "activity-dot" + (level ? ` level-${level}` : "");
-    dot.title = `${key}: ${count} task ${count === 1 ? "completion" : "completions"}`;
+    let title = `${key}: ${count} task ${count === 1 ? "completion" : "completions"}`;
+    const logged = sessionsByDay[key];
+    if (logged && logged.minutes > 0) {
+      title += ` · ${formatMinutes(logged.minutes)} focused`;
+      if (logged.notes.length) title += ` — “${logged.notes[0]}”`;
+    }
+    dot.title = title;
     grid.appendChild(dot);
   }
   updateCalendarSummary(state);
@@ -1062,6 +1246,11 @@ function toggleTask(id, trackId, checked) {
   if (checked) {
     const date = todayKey();
     state.completedAt[id] = date;
+    // A fresh verification restarts the spaced-repetition clock.
+    if (state.reviews)
+      Object.keys(state.reviews).forEach(key => {
+        if (key.startsWith(`${id}@`)) delete state.reviews[key];
+      });
     state.activity[date] = (Number(state.activity[date]) || 0) + 1;
     showToast(
       `${tracks.find(track => track.id === trackId).name} checkpoint verified.`
@@ -1075,6 +1264,77 @@ function toggleTask(id, trackId, checked) {
   saveState(state);
   renderTracks(state);
   updateSummary(state);
+}
+// Spaced-repetition review: a verified checkpoint becomes a self-test again at
+// 3, 7, and 14 days. Reviews live in state.reviews ("<id>@<milestone>" → date)
+// and never mutate completed/activity, so stats and streaks stay untouched.
+function daysSince(key) {
+  return Math.round((Date.parse(todayKey()) - Date.parse(key)) / 86400000);
+}
+function reviewDue(state, id) {
+  const completedDate = state.completedAt && state.completedAt[id];
+  if (!completedDate) return null;
+  const age = daysSince(completedDate);
+  if (age < 0) return null;
+  const reviewed = state.reviews || {};
+  for (const milestone of REVIEW_SCHEDULE) {
+    const key = `${id}@${milestone}`;
+    if (reviewed[key]) continue;
+    return age >= milestone ? milestone : null;
+  }
+  return null;
+}
+function markReviewSolid(state, id) {
+  const milestone = reviewDue(state, id);
+  if (!milestone) return false;
+  if (!state.reviews) state.reviews = {};
+  state.reviews[`${id}@${milestone}`] = todayKey();
+  return true;
+}
+function markReviewRedo(state, id) {
+  if (!state.completedAt || !state.completedAt[id]) return false;
+  state.completedAt[id] = todayKey(); // practice again: restart the cycle
+  if (state.reviews)
+    Object.keys(state.reviews).forEach(key => {
+      if (key.startsWith(`${id}@`)) delete state.reviews[key];
+    });
+  return true;
+}
+function renderReviewQueue(state) {
+  const queue = document.getElementById("reviewQueue");
+  const empty = document.getElementById("reviewEmpty");
+  const waiting = document.getElementById("reviewWait");
+  const count = document.getElementById("reviewCount");
+  if (!queue || !empty) return;
+  const due = [];
+  tracks.forEach(track =>
+    track.tasks.forEach((task, index) => {
+      const id = taskId(track, index);
+      const milestone = reviewDue(state, id);
+      if (milestone) due.push({ id, track, label: task[0], milestone });
+    })
+  );
+  const shown = due.slice(0, 5); // a daily ritual, not a backlog dump
+  empty.hidden = due.length > 0;
+  queue.hidden = due.length === 0;
+  if (count) count.textContent = due.length ? `${due.length} due` : "Nothing due";
+  if (waiting) waiting.hidden = due.length <= 5;
+  if (waiting) waiting.textContent = due.length > 5
+    ? `${due.length - 5} more waiting — they stay due until you practise them.`
+    : "";
+  queue.innerHTML = shown
+    .map(
+      item =>
+        `<div class="review-row" style="--track:${item.track.color}">` +
+        `<i class="review-dot"></i>` +
+        `<span class="review-main"><b>${escapeHtml(item.label)}</b>` +
+        `<small>${escapeHtml(item.track.name)} · due ${item.milestone}d after ✓</small></span>` +
+        `<span class="review-actions">` +
+        `<button class="review-solid" type="button" data-review-solid="${item.id}" title="Recalled it from memory">✓ Solid</button>` +
+        `<button class="review-redo" type="button" data-review-redo="${item.id}" title="Needs practice again">↺ Redo</button>` +
+        `</span></div>`
+    )
+    .join("");
 }
 function toggleCustomTask(id, checked) {
   const state = loadState();
@@ -1172,19 +1432,91 @@ function deleteResource(id) {
 }
 function applyFilters() {
   const term = document.getElementById("search").value.toLowerCase().trim();
+  const filtering = activeFilter !== "all" || term.length > 0;
   let visible = 0;
-  document.querySelectorAll(".task-row").forEach(row => {
-    const isDone = row.classList.contains("done");
-    const filterOk =
-      activeFilter === "all" ||
-      (activeFilter === "done" && isDone) ||
-      (activeFilter === "open" && !isDone);
-    const match = row.textContent.toLowerCase().includes(term);
-    const show = filterOk && match;
-    row.classList.toggle("hidden", !show);
-    if (show) visible++;
+  document.querySelectorAll(".track-card").forEach(card => {
+    let cardVisible = 0;
+    card.querySelectorAll(".task-row").forEach(row => {
+      const isDone = row.classList.contains("done");
+      const filterOk =
+        activeFilter === "all" ||
+        (activeFilter === "done" && isDone) ||
+        (activeFilter === "open" && !isDone);
+      const match = row.textContent.toLowerCase().includes(term);
+      const show = filterOk && match;
+      row.classList.toggle("hidden", !show);
+      if (show) {
+        visible++;
+        cardVisible++;
+      }
+    });
+    // While searching/filtering, expand every card that still has matches so
+    // results stay visible without hover; otherwise fall back to hover tiles.
+    card.classList.toggle("expanded", filtering && cardVisible > 0);
   });
   document.getElementById("emptyState").classList.toggle("show", visible === 0);
+}
+// Focus journal: when a finished run has recorded time, ask what it was about
+// and which track it belongs to. The note and tag are written onto the session
+// that endFocusRun already pushed, so skipping is always safe.
+function openJournalPrompt(minutes) {
+  const overlay = document.getElementById("journalOverlay");
+  if (!overlay || minutes <= 0) return;
+  const select = document.getElementById("journalTrack");
+  if (!select.options.length) {
+    const option = (value, label) => {
+      const element = document.createElement("option");
+      element.value = value;
+      element.textContent = label;
+      return element;
+    };
+    tracks.forEach(track => select.appendChild(option(track.id, track.name)));
+    select.appendChild(option("other", "Other / general"));
+  }
+  document.getElementById("journalTitle").textContent =
+    `${formatMinutes(minutes)} of focus — what did you work on?`;
+  const state = loadState();
+  const queued = tracks.some(track => track.id === state.queueFocus)
+    ? state.queueFocus
+    : "other";
+  select.value = queued;
+  document.getElementById("journalNote").value = "";
+  journalMinutes = minutes;
+  overlay.hidden = false;
+  document.getElementById("journalNote").focus();
+}
+function closeJournalPrompt() {
+  document.getElementById("journalOverlay").hidden = true;
+  journalMinutes = 0;
+}
+function saveJournalFocus() {
+  if (!journalMinutes) return;
+  const note = document.getElementById("journalNote").value.trim();
+  const trackId = document.getElementById("journalTrack").value;
+  const state = loadState();
+  const sessions = Array.isArray(state.focus.sessions)
+    ? state.focus.sessions
+    : [];
+  const last = sessions[sessions.length - 1];
+  let savedTrack = null;
+  if (last) {
+    savedTrack =
+      trackId !== "other" && tracks.some(track => track.id === trackId)
+        ? trackId
+        : null;
+    last.track = savedTrack;
+    last.note = note || null;
+    saveState(state);
+  }
+  closeJournalPrompt();
+  renderFocusTotals(state);
+  renderActivity(state);
+  const track = tracks.find(item => item.id === savedTrack);
+  showToast(track ? `${track.name} focus logged.` : "Focus session saved.");
+}
+function skipJournalPrompt() {
+  if (!journalMinutes) return;
+  closeJournalPrompt();
 }
 function commitFocusRun() {
   const delta = Math.round(focusSeconds / 60) - focusCommitted;
@@ -1205,6 +1537,11 @@ function endFocusRun() {
     saveState(state);
   }
   focusCommitted = 0;
+}
+function stopFocusRun() {
+  const minutes = focusCommitted;
+  endFocusRun();
+  if (minutes > 0) openJournalPrompt(minutes);
 }
 function formatTime(seconds) {
   const minutes = Math.floor(seconds / 60);
@@ -1307,6 +1644,108 @@ async function handleAuth(event) {
       ? "Check your email to confirm your account, then sign in."
       : "Signed in successfully.";
 }
+// Builds a self-contained, print-ready A4 report from the current state. It is
+// shown in a sandboxed iframe and printed via the browser's own Print → Save as
+// PDF, so no PDF dependency or rasterization is needed.
+function buildSemesterReport(state) {
+  const stats = getStats(state);
+  const focusDays =
+    state.focus && typeof state.focus.days === "object" ? state.focus.days : {};
+  const focusTotal = Object.values(focusDays).reduce(
+    (sum, value) => sum + (Number(value) || 0),
+    0
+  );
+  const activeDays = Object.values(state.activity || {}).filter(
+    value => Number(value) > 0
+  ).length;
+  const sessions = Array.isArray(state.focus.sessions)
+    ? state.focus.sessions
+    : [];
+  const journals = [...sessions].reverse().slice(0, 6);
+  const resources = Array.isArray(state.resources) ? state.resources : [];
+  const person =
+    currentUser && currentUser.email
+      ? String(currentUser.email).split("@")[0]
+      : "Local progress";
+  const today = new Date().toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const journalRows = journals
+    .map(session => {
+      const trackName = session.track
+        ? (tracks.find(track => track.id === session.track) || {}).name
+        : "General";
+      const label = session.note || "(no note)";
+      return (
+        `<div class="ledger-row"><span class="ledger-date">${escapeHtml(session.date)}</span>` +
+        `<b>${escapeHtml(trackName)}</b><span>${escapeHtml(label)}</span>` +
+        `<em>${formatMinutes(Number(session.minutes) || 0)}</em></div>`
+      );
+    })
+    .join("");
+  const trackRows = tracks
+    .map(track => {
+      const item = stats.byTrack[track.id];
+      return (
+        `<div class="pt-row" style="--t:${track.color}"><span class="pt-name"><i></i>${escapeHtml(track.name)}</span>` +
+        `<div class="pt-rail"><span style="width:${item.percent}%"></span></div>` +
+        `<strong>${item.done}/${item.total}</strong></div>`
+      );
+    })
+    .join("");
+  const shelf = resources
+    .slice(0, 4)
+    .map(item => `<li>${escapeHtml(String((item && item.name) || ""))}</li>`)
+    .join("");
+  return `<!doctype html><html><head><meta charset="utf-8" /><title>Semester evidence report</title>
+<style>
+@page { size: A4; margin: 10mm 11mm 9mm; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 10px/1.35 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #2a2822; background: white; }
+.mast { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #f6ce50; padding-bottom: 7px; margin-bottom: 10px; }
+.mast h1 { margin: 0; font-size: 19px; letter-spacing: -.5px; }
+.mast .sub { color: #6f6c60; font-size: 8.5px; }
+.mast .who { text-align: right; font-size: 9px; }
+.stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 8px; }
+.stat { border: 1px solid #e9e4d4; border-radius: 8px; padding: 6px 8px; }
+.stat b { display: block; font-size: 15px; letter-spacing: -.3px; }
+.stat span { color: #6f6c60; font-size: 7.5px; text-transform: uppercase; letter-spacing: .5px; }
+h2 { margin: 9px 0 5px; font-size: 9.5px; text-transform: uppercase; letter-spacing: .6px; color: #6f6c60; }
+.pt-row { display: grid; grid-template-columns: 120px 1fr 40px; align-items: center; gap: 8px; padding: 2.5px 0; }
+.pt-name i { display: inline-block; width: 6px; height: 6px; border-radius: 2px; background: var(--t); margin-right: 5px; }
+.pt-rail { height: 5px; border-radius: 3px; background: #ece7d8; overflow: hidden; }
+.pt-rail span { display: block; height: 100%; background: var(--t); }
+.pt-row strong { text-align: right; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.panel { border: 1px solid #e9e4d4; border-radius: 8px; padding: 6px 9px; page-break-inside: avoid; }
+.panel p { margin: 0; color: #6f6c60; }
+.ledger-row { display: grid; grid-template-columns: 64px 66px 1fr 34px; gap: 6px; padding: 2.5px 0; border-top: 1px dotted #e7e1d1; }
+.ledger-row .ledger-date { color: #8a867b; }
+.ledger-row em { font-style: normal; text-align: right; }
+.shelf { display: flex; flex-wrap: wrap; gap: 4px; padding: 0; margin: 0; list-style: none; }
+.shelf li { border: 1px solid #e9e4d4; border-radius: 999px; padding: 2px 8px; font-size: 8.5px; }
+.foot { display: flex; justify-content: space-between; margin-top: 10px; border-top: 1px solid #ece7d8; padding-top: 6px; color: #8a867b; font-size: 8px; }
+</style></head><body><div class="sheet">
+<div class="mast"><div><h1>SEM ASSIST</h1><div class="sub">Semester evidence report</div></div><div class="who"><b>${escapeHtml(person)}</b><br />${escapeHtml(today)}</div></div>
+<div class="stats">
+<div class="stat"><b>${stats.percent}%</b><span>Verified</span></div>
+<div class="stat"><b>${stats.done}/${stats.total}</b><span>Checkpoints</span></div>
+<div class="stat"><b>${streak(state.activity)}</b><span>Day streak</span></div>
+<div class="stat"><b>${stats.done * 10}</b><span>Proof points</span></div>
+<div class="stat"><b>${formatMinutes(focusTotal)}</b><span>Focused</span></div>
+<div class="stat"><b>${activeDays}</b><span>Active days</span></div>
+</div>
+<h2>Semester pulse</h2>
+<div class="panel">${trackRows}</div>
+<div class="two">
+<div class="panel"><h2 style="margin-top:8px">Deep-work ledger</h2>${journalRows || "<p>No focus sessions journaled yet.</p>"}</div>
+<div class="panel"><h2 style="margin-top:8px">Reference shelf</h2><p>${stats.customDone}/${stats.customTotal} personal tasks · ${resources.length} resources saved</p>${shelf ? `<ul class="shelf">${shelf}</ul>` : ""}</div>
+</div>
+<div class="foot"><span>Prepared with SEM ASSIST on ${escapeHtml(today)}.</span><span class="report-mark">Evidence kept locally in this browser.</span></div>
+</div></body></html>`;
+}
 async function init() {
   initCookieBanner();
   const snapToggle = document.getElementById("resourceSnap");
@@ -1335,6 +1774,31 @@ async function init() {
       applyFilters();
     })
   );
+  // Tiles expand on click: toggle when the tile (head/chrome) is clicked, but
+  // never when the click targets the task list or an interactive control.
+  document.getElementById("checkpoints").addEventListener("click", event => {
+    const card = event.target.closest(".track-card");
+    if (!card) return;
+    if (event.target.closest(".task-list, a, input, button")) return;
+    const open = card.classList.toggle("open");
+    card.setAttribute("aria-expanded", String(open));
+    // A checkbox left focused inside the tile would keep it expanded via
+    // :focus-within, so drop focus when collapsing.
+    if (!open && card.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+  });
+  // Keyboard parity: Enter/Space on the focused tile header toggles it.
+  document.getElementById("checkpoints").addEventListener("keydown", event => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    if (event.target.closest("a, input, button")) return;
+    const head = event.target.closest(".track-head");
+    if (!head) return;
+    event.preventDefault();
+    const card = head.closest(".track-card");
+    const open = card.classList.toggle("open");
+    card.setAttribute("aria-expanded", String(open));
+  });
   document.getElementById("showOpen").addEventListener("click", () => {
     activeFilter = "open";
     document
@@ -1348,6 +1812,53 @@ async function init() {
       .scrollIntoView({ behavior: "smooth", block: "start" });
   });
   document.getElementById("search").addEventListener("input", applyFilters);
+  // Keyboard shortcuts: j/k move the checkpoint cursor, Space toggles it, /
+  // focuses search, t starts or pauses the focus timer. Never while typing.
+  document.addEventListener("keydown", event => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.target;
+    const editing =
+      target instanceof HTMLElement &&
+      !!target.closest("input, textarea, select, [contenteditable]");
+    if (editing) return;
+    // While the focus journal is open, its own Enter/Escape handling wins.
+    const journalOverlay = document.getElementById("journalOverlay");
+    const reportOverlay = document.getElementById("reportOverlay");
+    if (journalOverlay && !journalOverlay.hidden) return;
+    if (reportOverlay && !reportOverlay.hidden) return;
+    if (event.key === "/") {
+      event.preventDefault();
+      const search = document.getElementById("search");
+      search?.focus();
+      search?.select();
+    } else if (event.key === "j" || event.key === "k") {
+      event.preventDefault();
+      moveKeyboardCursor(event.key === "j" ? 1 : -1);
+    } else if (event.key === "t") {
+      event.preventDefault();
+      toggleFocusTimer();
+    } else if (event.key === " ") {
+      // Only when focus is on the page itself (not a button, link, or tile),
+      // so native Space activation of focused controls keeps working.
+      if (target === document.body || target === document.documentElement) {
+        event.preventDefault();
+        toggleKeyboardCursor();
+      }
+    }
+  });
+  // Checkpoint queue: each row verifies the underlying checkpoint in one click,
+  // and the focus select chooses which track the queue draws from (persisted).
+  document.getElementById("missionQueue").addEventListener("click", event => {
+    const row = event.target.closest("[data-qid]");
+    if (!row) return;
+    toggleTask(row.dataset.qid, row.dataset.track, true);
+  });
+  document.getElementById("queueFocus").addEventListener("change", event => {
+    const state = loadState();
+    state.queueFocus = event.target.value || "all";
+    saveState(state);
+    renderMissionQueue(state);
+  });
   document
     .getElementById("customForm")
     .addEventListener("submit", addCustomTask);
@@ -1365,14 +1876,73 @@ async function init() {
   document.getElementById("timerPause").addEventListener("click", () => {
     clearInterval(timerId);
     timerId = null;
-    endFocusRun();
+    stopFocusRun();
   });
   document.getElementById("timerReset").addEventListener("click", () => {
     clearInterval(timerId);
     timerId = null;
-    endFocusRun();
+    stopFocusRun();
     focusSeconds = 0;
     setTimer();
+  });
+  const journalOverlayEl = document.getElementById("journalOverlay");
+  document.getElementById("journalSave").addEventListener("click", saveJournalFocus);
+  document.getElementById("journalSkip").addEventListener("click", skipJournalPrompt);
+  journalOverlayEl.addEventListener("click", event => {
+    if (event.target === journalOverlayEl) skipJournalPrompt();
+  });
+  journalOverlayEl.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      skipJournalPrompt();
+    } else if (event.key === "Enter" && event.target.id === "journalNote") {
+      event.preventDefault();
+      saveJournalFocus();
+    }
+  });
+  // Review mode: mark a due checkpoint as recalled solid, or redo it (which
+  // restarts its spaced-repetition clock). Both rerender through updateSummary.
+  document.getElementById("reviewQueue").addEventListener("click", event => {
+    const solid = event.target.closest("[data-review-solid]");
+    const redo = event.target.closest("[data-review-redo]");
+    if (!solid && !redo) return;
+    const state = loadState();
+    if (solid) {
+      if (markReviewSolid(state, solid.dataset.reviewSolid)) {
+        saveState(state);
+        updateSummary(state);
+        showToast("Marked solid — recalled from memory.");
+      }
+    } else if (markReviewRedo(state, redo.dataset.reviewRedo)) {
+      saveState(state);
+      updateSummary(state);
+      showToast("Redo scheduled — the 3-day clock restarts.");
+    }
+  });
+  // Semester report: preview a print-ready A4 sheet in an iframe and let the
+  // browser's Print dialog do the PDF export.
+  const reportOverlayEl = document.getElementById("reportOverlay");
+  const reportFrame = document.getElementById("reportFrame");
+  document.getElementById("reportOpen").addEventListener("click", () => {
+    reportFrame.srcdoc = buildSemesterReport(loadState());
+    reportOverlayEl.hidden = false;
+    document.getElementById("reportClose").focus();
+  });
+  document.getElementById("reportClose").addEventListener("click", () => {
+    reportOverlayEl.hidden = true;
+  });
+  document.getElementById("reportPrint").addEventListener("click", () => {
+    const frameWindow = reportFrame.contentWindow;
+    if (frameWindow && typeof frameWindow.print === "function") {
+      frameWindow.focus();
+      frameWindow.print();
+    }
+  });
+  reportOverlayEl.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      reportOverlayEl.hidden = true;
+    }
   });
   document.getElementById("exportData").addEventListener("click", () => {
     const link = document.createElement("a");
@@ -1453,6 +2023,7 @@ export {
   saveState,
   flushCloudSave,
   getStats,
+  nextUp,
   streak,
   escapeHtml,
   validResourceUrl,
@@ -1470,4 +2041,8 @@ export {
   applyFilters,
   formatMinutes,
   addFocusMinutes,
+  reviewDue,
+  markReviewSolid,
+  markReviewRedo,
+  buildSemesterReport,
 };
