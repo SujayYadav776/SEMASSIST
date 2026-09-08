@@ -263,20 +263,23 @@ describe("applySession merge semantics (multi-device)", () => {
     expect(text(byId(doc, "focusCount"))).toBe("0 / 12");
     expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(true);
 
-    // Cloud load does not write through: localStorage keeps the stale local copy.
-    const local = stored(doc)!;
-    expect((local.resources as unknown[]).length).toBe(1);
-    expect((local.completed as Record<string, boolean>)["python-1"]).toBe(true);
+    // Cloud load does not write through: nothing is persisted on sign-in.
+    // The guest key still holds this browser's local data.
+    const guest = stored(doc)!;
+    expect((guest.completed as Record<string, boolean>)["python-1"]).toBe(true);
+    expect((guest.resources as unknown[]).length).toBe(1);
+    expect(stored(doc, "user-1")).toBeNull(); // per-user key not written yet
     // No upload happened (row existed).
     expect(fake.upserts).toHaveLength(0);
 
-    // The first user interaction snapshots the cloud-derived state over local.
+    // The first user interaction snapshots the cloud-derived state under the
+    // per-user key (the guest key stays untouched).
     doc
       .querySelector<HTMLInputElement>(
         '.task-row[data-task-id="python-1"] .check'
       )!
       .click();
-    const after = stored(doc)!;
+    const after = stored(doc, "user-1")!;
     expect(after.completed as Record<string, boolean>).toMatchObject({
       "java-1": true,
       "python-1": true,
@@ -285,7 +288,7 @@ describe("applySession merge semantics (multi-device)", () => {
     expect(text(byId(doc, "workbenchCount"))).toBe("2 completed");
   });
 
-  it("uploads the seeded local state when no cloud row exists", async () => {
+  it("starts a brand-new account blank — the guest state is never adopted", async () => {
     const { app, doc, fake } = await bootWithoutInit(null, LOCAL_STATE);
 
     await (
@@ -293,19 +296,25 @@ describe("applySession merge semantics (multi-device)", () => {
     ).applySession(USER);
     await sleep(600); // let the debounced initial upload flush
 
-    // Local wins: python + the local-only custom task and resource are visible.
-    expect(text(byId(doc, "workbenchCount"))).toBe("1 completed");
-    expect(text(byId(doc, "resourceCount"))).toBe("1 saved");
-    expect(text(byId(doc, "customTaskCount"))).toBe("1 open · 1 total");
-    expect(text(byId(doc, "deviceProgress"))).toBe("1 / 77");
+    // Fresh account: nothing upfront, even though this browser holds guest work.
+    expect(text(byId(doc, "workbenchCount"))).toBe("0 completed");
+    expect(text(byId(doc, "resourceCount"))).toBe("0 saved");
+    expect(text(byId(doc, "customTaskCount"))).toBe("0 open · 0 total");
+    expect(text(byId(doc, "deviceProgress"))).toBe("0 / 76");
 
+    // The blank state is uploaded as the account's starting point.
     expect(fake.upserts).toHaveLength(1);
     const payload = fake.upserts[0];
     expect(payload.user_id).toBe("user-1");
     const state = payload.state as Record<string, unknown>;
-    expect((state.completed as Record<string, boolean>)["python-1"]).toBe(true);
-    expect((state.resources as unknown[]).length).toBe(1);
-    expect((state.customTasks as unknown[]).length).toBe(1);
+    expect(state.completed).toEqual({});
+    expect(state.resources).toEqual([]);
+    expect(state.customTasks).toEqual([]);
+
+    // The guest's local data stays exactly where it was.
+    const guest = stored(doc)!;
+    expect((guest.completed as Record<string, boolean>)["python-1"]).toBe(true);
+    expect((guest.resources as unknown[]).length).toBe(1);
   });
 
   it("signing out restores the local snapshot while the cloud row is untouched", async () => {
@@ -319,7 +328,7 @@ describe("applySession merge semantics (multi-device)", () => {
     expect(text(byId(doc, "resourceCount"))).toBe("0 saved");
     expect(text(byId(doc, "focusCount"))).toBe("0 / 12");
 
-    // Signed out: local snapshot returns to the screen; nothing is uploaded.
+    // Signed out: the guest snapshot returns to the screen; nothing is uploaded.
     await apply(null);
     expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(false);
     expect(text(byId(doc, "resourceCount"))).toBe("1 saved");

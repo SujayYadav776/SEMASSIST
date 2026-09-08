@@ -210,7 +210,11 @@ export const byId = (doc: Document, id: string) =>
   doc.getElementById(id) as HTMLElement | null;
 export const text = (el: HTMLElement | null) => (el ? el.textContent : null);
 export const STORAGE_KEY = "aster-study-dashboard-v3";
-export const stored = (doc: Document) =>
+export const USER_STORAGE_KEY = "aster-study-dashboard-v3:u-user-1";
+/** Reads the guest key by default; pass a userId for a per-user key. */
+export const stored = (doc: Document, userId?: string) =>
   JSON.parse(
-    doc.defaultView!.localStorage.getItem(STORAGE_KEY) ?? "null"
+    doc.defaultView!.localStorage.getItem(
+      userId ? `${STORAGE_KEY}:u-${userId}` : STORAGE_KEY
+    ) ?? "null"
   ) as Record<string, unknown> | null;

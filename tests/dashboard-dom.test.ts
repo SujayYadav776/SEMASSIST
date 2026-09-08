@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   STORAGE_KEY,
+  USER_STORAGE_KEY,
   bootApp,
   byId,
   makeFakeSupabase,
@@ -1104,21 +1105,17 @@ describe("weekly leaderboard", () => {
       leaderboardRows: [
         { user_id: "user-1", display_name: "Sujay", points: 10 },
       ],
-    });
-    const { doc } = await bootApp({
-      preSeed: {
-        [STORAGE_KEY]: JSON.stringify({
-          completed: { "python-1": true },
-          completedAt: { "python-1": "2026-09-01" },
-          activity: { "2026-09-01": 1 },
-          customTasks: [],
-          resources: [],
-          focus: { days: {}, sessions: [] },
-        }),
+      // A returning user: their progress lives in the cloud row.
+      existingState: {
+        completed: { "python-1": true },
+        completedAt: { "python-1": "2026-09-01" },
+        activity: { "2026-09-01": 1 },
+        customTasks: [],
+        resources: [],
+        focus: { days: {}, sessions: [] },
       },
-      supabaseConfig: LB_CONFIG,
-      supabaseClientFactory: () => fake,
     });
+    const { doc } = await bootSignedIn(fake);
     await lbSleep(60);
     doc
       .querySelector<HTMLInputElement>(
@@ -1164,7 +1161,9 @@ describe("weekly leaderboard", () => {
     input.value = "Ace";
     byId(doc, "leaderboardNameSave")!.click();
     await lbSleep(120);
-    expect((stored(doc) as Record<string, unknown>).leaderboardName).toBe("Ace");
+    expect(
+      (stored(doc, "user-1") as Record<string, unknown>).leaderboardName
+    ).toBe("Ace");
     expect(fake.rpcCalls).toContainEqual(
       expect.objectContaining({
         name: "earn_points",
@@ -1206,7 +1205,8 @@ describe("profile card", () => {
     const badges = [
       ...doc.querySelectorAll("#profileBadges .profile-badge"),
     ].map(badge => badge.textContent?.trim());
-    expect(badges).toEqual(["Python", "30 Days of Python", "Java"]);
+    // Only tracks with verified checkpoints appear — no fabricated skills.
+    expect(badges).toEqual(["Python", "30 Days of Python"]);
     expect(text(byId(doc, "profileBio"))).toContain(
       "6 of 76 checkpoints verified"
     );
@@ -1275,19 +1275,31 @@ describe("profile card", () => {
     expect(overlay.hasAttribute("hidden")).toBe(true);
   });
 
-  it("starts fully neutral for fresh visitors, then personalizes from editable name and semester", async () => {
+  it("starts fully neutral for fresh visitors with a [yourname] placeholder, then personalizes", async () => {
     const { app, doc } = await bootApp();
-    expect(
-      text(byId(doc, "profileNameRow")!.querySelector(".profile-name")!)
-    ).toBe("Learner");
-    expect(text(byId(doc, "profileAvatar"))).toBe("L");
-    expect(text(byId(doc, "welcomeHeadline"))).toBe("Welcome in.");
-    expect(text(byId(doc, "profileSemesterText"))).toBe("Add semester");
-    // The share card is neutral too.
+    const nameEl = byId(doc, "profileNameRow")!.querySelector(".profile-name")!;
+    expect(text(nameEl)).toBe("[yourname]");
+    expect(nameEl.classList.contains("placeholder")).toBe(true);
+    // The greeting carries the bracketed placeholder beside the welcome text.
+    const headline = byId(doc, "welcomeHeadline")!;
+    expect(text(headline)).toContain("Welcome in, [yourname].");
+    const headlineName = headline.querySelector(".welcome-name.placeholder")!;
+    expect(headlineName).toBeTruthy();
+    // Clicking the headline placeholder opens the name editor too.
+    (headlineName as HTMLElement).click();
+    expect(doc.querySelector<HTMLInputElement>(".profile-name-input")!).toBeTruthy();
+    // No fabricated skills or stats: badges show an honest placeholder.
+    const badges = [
+      ...doc.querySelectorAll("#profileBadges .profile-badge"),
+    ].map(badge => badge.textContent?.trim());
+    expect(badges).toEqual([
+      "Your top skills appear as you verify checkpoints",
+    ]);
+    expect(text(byId(doc, "introNote"))).not.toContain("lead");    // The share card is neutral too.
     const svg = (app as { buildProfileCardSvg(state: object): string }).buildProfileCardSvg(
       (app as { loadState(): object }).loadState()
     );
-    expect(svg).toContain("Learner");
+    expect(svg).toContain("[yourname]");
     expect(svg).not.toContain("Semester 3");
     expect(svg).not.toContain("Riya");
   });

@@ -392,10 +392,13 @@ const dateKey = date => {
 const todayKey = () => dateKey(new Date());
 const CHECKPOINT_POINTS = 10;
 const SEMESTER_WEEKS = 16;
-const PROFILE_FALLBACK_NAME = "Learner";
+const PROFILE_PLACEHOLDER_NAME = "[yourname]";
 function profileDisplayName(state) {
   const name = String(state?.profileName || "").trim();
-  return name || PROFILE_FALLBACK_NAME;
+  return name || PROFILE_PLACEHOLDER_NAME;
+}
+function profileHasName(state) {
+  return Boolean(String(state?.profileName || "").trim());
 }
 function profileDisplaySemester(state) {
   return String(state?.profileSemester || "").trim();
@@ -464,12 +467,21 @@ function normalizeState(state) {
     },
   };
 }
-function loadLocalState() {
+// Each account gets its own storage key so no user ever sees another's
+// progress: guests use the base key, signed-in users a per-user suffix.
+function storageKeyForUser(userId) {
+  return userId ? `${STORAGE_KEY}:u-${userId}` : STORAGE_KEY;
+}
+function loadLocalState(userId) {
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    const stored = JSON.parse(
+      localStorage.getItem(storageKeyForUser(userId))
+    );
     if (stored && typeof stored === "object") return normalizeState(stored);
-    const old = JSON.parse(localStorage.getItem(LEGACY_KEY));
-    if (old && typeof old === "object") return migrateLegacy(old);
+    if (!userId) {
+      const old = JSON.parse(localStorage.getItem(LEGACY_KEY));
+      if (old && typeof old === "object") return migrateLegacy(old);
+    }
   } catch {}
   return defaultState();
 }
@@ -480,7 +492,10 @@ function saveState(state) {
   currentState = state;
   stateDirty = true;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(
+      storageKeyForUser(currentUser?.id),
+      JSON.stringify(state)
+    );
   } catch {}
   if (!currentUser) return;
   clearTimeout(saveTimer);
@@ -1036,6 +1051,7 @@ async function refreshLeaderboard() {
 function topSkills(state) {
   const stats = getStats(state);
   return [...tracks]
+    .filter(track => stats.byTrack[track.id].done > 0)
     .sort((a, b) => stats.byTrack[b.id].done - stats.byTrack[a.id].done)
     .slice(0, 3);
 }
@@ -1128,6 +1144,7 @@ function wrapLines(text, maxChars) {
 function buildProfileCardSvg(state) {
   const stats = getStats(state);
   const name = profileDisplayName(state);
+  const avatarGlyph = profileHasName(state) ? name.slice(0, 1) : "+";
   const semesterRaw = profileDisplaySemester(state);
   const semester = escapeHtml(semesterRaw);
   const semW = semesterRaw ? 60 + semesterRaw.length * 16 : 0;
@@ -1135,7 +1152,7 @@ function buildProfileCardSvg(state) {
   const lead = skills[0];
   const bio =
     `${stats.done} of ${stats.total} checkpoints verified.` +
-    (stats.byTrack[lead.id].done > 0 ? ` ${lead.name} leads the way.` : "");
+    (lead ? ` ${lead.name} leads the way.` : "");
   const bioLines = wrapLines(bio, 50);
   const focusDays =
     state.focus && typeof state.focus.days === "object" ? state.focus.days : {};
@@ -1159,13 +1176,16 @@ function buildProfileCardSvg(state) {
   const H = 1350;
   const badgeGap = 18;
   const badgeW = label => 40 + label.length * 15;
+  const badgeLabels = skills.length
+    ? skills.map(track => ({ name: track.name, color: track.color }))
+    : [{ name: "Top skills appear as you progress", color: "#8b887e" }];
   const totalBadgeW =
-    skills.reduce((sum, track) => sum + badgeW(track.name), 0) +
-    badgeGap * (skills.length - 1);
+    badgeLabels.reduce((sum, badge) => sum + badgeW(badge.name), 0) +
+    badgeGap * (badgeLabels.length - 1);
   let badgeX = (W - totalBadgeW) / 2;
-  const badgeRects = skills.map(track => {
-    const w = badgeW(track.name);
-    const rect = { x: badgeX, w, color: track.color };
+  const badgeRects = badgeLabels.map(badge => {
+    const w = badgeW(badge.name);
+    const rect = { x: badgeX, w, color: badge.color };
     badgeX += w + badgeGap;
     return rect;
   });
@@ -1202,7 +1222,7 @@ function buildProfileCardSvg(state) {
       semesterRaw ? `${semester} · ${escapeHtml(monthYear)}` : escapeHtml(monthYear)
     }</text>` +
     `<circle cx="${W / 2}" cy="250" r="118" fill="url(#gold)"/>` +
-    `<text x="${W / 2}" y="296" text-anchor="middle" font-size="150" font-weight="800" fill="#26241f">${escapeHtml(name.slice(0, 1))}</text>` +
+    `<text x="${W / 2}" y="296" text-anchor="middle" font-size="150" font-weight="800" fill="#26241f">${escapeHtml(avatarGlyph)}</text>` +
     `<text x="${W / 2}" y="430" text-anchor="middle" font-size="64" font-weight="800" fill="#2b2923">${escapeHtml(name)}</text>` +
     (semesterRaw
       ? `<g transform="translate(${(W - semW) / 2}, 500)"><rect width="${semW}" height="46" rx="23" fill="#33322e"/><text x="${semW / 2}" y="31" text-anchor="middle" font-size="24" font-weight="700" fill="#f4f1e6">${semester}</text></g>`
@@ -1210,7 +1230,7 @@ function buildProfileCardSvg(state) {
     badgeRects
       .map(
         (r, i) =>
-          `<g><rect x="${r.x}" y="580" width="${r.w}" height="48" rx="24" fill="#33322e"/><circle cx="${r.x + 30}" cy="604" r="8" fill="${r.color}"/><text x="${r.x + 48}" y="611" font-size="23" font-weight="700" fill="#e9e7de">${escapeHtml(skills[i].name)}</text></g>`
+          `<g><rect x="${r.x}" y="580" width="${r.w}" height="48" rx="24" fill="#33322e"/><circle cx="${r.x + 30}" cy="604" r="8" fill="${r.color}"/><text x="${r.x + 48}" y="611" font-size="23" font-weight="700" fill="#e9e7de">${escapeHtml(badgeLabels[i].name)}</text></g>`
       )
       .join("") +
     bioLines
@@ -1316,29 +1336,34 @@ async function copySharePng() {
 }
 function renderProfile(state) {
   const stats = getStats(state);
+  const hasName = profileHasName(state);
   const name = profileDisplayName(state);
   const avatar = document.getElementById("profileAvatar");
-  if (avatar) avatar.textContent = name.slice(0, 1).toUpperCase();
+  if (avatar) avatar.textContent = hasName ? name.slice(0, 1).toUpperCase() : "+";
   const nameRow = document.getElementById("profileNameRow");
   if (nameRow) {
     nameRow.innerHTML =
-      `<h2 class="profile-name">${escapeHtml(name)}</h2>` +
+      `<h2 class="profile-name${hasName ? "" : " placeholder"}"${
+        hasName ? "" : ' data-edit-name title="Click to add your name"'
+      }>${escapeHtml(name)}</h2>` +
       `<button class="profile-edit" data-edit-name type="button" aria-label="Edit name" title="Edit name">✎</button>`;
   }
   const headline = document.getElementById("welcomeHeadline");
   if (headline) {
     headline.innerHTML = String(state.profileName || "").trim()
       ? `Welcome in, <em>${escapeHtml(name)}.</em>`
-      : "Welcome in.";
+      : `Welcome in, <em class="welcome-name placeholder" data-edit-name title="Click to add your name">[yourname].</em>`;
   }
   const badges = document.getElementById("profileBadges");
   if (badges) {
-    badges.innerHTML = topSkills(state)
-      .map(
-        track =>
-          `<span class="profile-badge" style="--dot:${track.color}"><i></i>${escapeHtml(track.name)}</span>`
-      )
-      .join("");
+    badges.innerHTML =
+      topSkills(state)
+        .map(
+          track =>
+            `<span class="profile-badge" style="--dot:${track.color}"><i></i>${escapeHtml(track.name)}</span>`
+        )
+        .join("") ||
+      '<span class="profile-badge placeholder-badge">Your top skills appear as you verify checkpoints</span>';
   }
   const role = document.getElementById("profileRole");
   if (role) {
@@ -1352,12 +1377,18 @@ function renderProfile(state) {
   const bio = document.getElementById("profileBio");
   if (bio) {
     const lead = topSkills(state)[0];
-    const leadPart =
-      stats.byTrack[lead.id].done > 0
-        ? ` ${lead.name} leads the way.`
-        : " The semester is still fresh.";
+    const leadPart = lead
+      ? ` ${lead.name} leads the way.`
+      : " The semester is still fresh.";
     bio.textContent =
       `${stats.done} of ${stats.total} checkpoints verified.${leadPart}`;
+  }
+  const introNote = document.getElementById("introNote");
+  if (introNote) {
+    const lead = topSkills(state)[0];
+    introNote.textContent = lead
+      ? `A calm workspace for turning roadmap checkpoints into visible evidence. ${lead.name} leads your semester so far.`
+      : "A calm workspace for turning roadmap checkpoints into visible evidence. Verify your first checkpoint and the story builds itself.";
   }
   const metrics = document.getElementById("profileMetrics");
   if (metrics) {
@@ -1415,6 +1446,7 @@ function editProfileName() {
   const input = document.createElement("input");
   input.className = "profile-name-input";
   input.maxLength = 30;
+  input.placeholder = "yourname";
   input.value = String(loadState().profileName || "");
   input.setAttribute("aria-label", "Name");
   row.innerHTML = "";
@@ -2096,7 +2128,7 @@ async function applySession(user) {
   document.getElementById("signedIn").hidden = !user;
   if (!user) {
     currentAccessToken = null;
-    currentState = loadLocalState();
+    currentState = loadLocalState(null);
     renderTracks(currentState);
     updateSummary(currentState);
     refreshLeaderboard();
@@ -2107,7 +2139,7 @@ async function applySession(user) {
   const sb = await ensureSupabase();
   if (!sb) {
     currentAccessToken = null;
-    currentState = loadLocalState();
+    currentState = loadLocalState(user.id);
     renderTracks(currentState);
     updateSummary(currentState);
     refreshLeaderboard();
@@ -2122,8 +2154,10 @@ async function applySession(user) {
     .select("state")
     .eq("user_id", user.id)
     .maybeSingle();
+  // A brand-new account starts with nothing: never adopt the guest state
+  // that happens to live in this browser's storage.
   currentState =
-    !error && data?.state ? normalizeState(data.state) : loadLocalState();
+    !error && data?.state ? normalizeState(data.state) : defaultState();
   renderTracks(currentState);
   updateSummary(currentState);
   refreshLeaderboard();
@@ -2567,6 +2601,12 @@ async function init() {
     profileCard.addEventListener("click", event => {
       if (event.target.closest("[data-edit-semester]")) editSemester();
       else if (event.target.closest("[data-edit-name]")) editProfileName();
+    });
+  }
+  const headlineEl = document.getElementById("welcomeHeadline");
+  if (headlineEl) {
+    headlineEl.addEventListener("click", event => {
+      if (event.target.closest("[data-edit-name]")) editProfileName();
     });
   }
   const boardNameSave = document.getElementById("leaderboardNameSave");
