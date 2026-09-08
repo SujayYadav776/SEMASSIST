@@ -392,7 +392,14 @@ const dateKey = date => {
 const todayKey = () => dateKey(new Date());
 const CHECKPOINT_POINTS = 10;
 const SEMESTER_WEEKS = 16;
-const PROFILE_NAME = "Sujay";
+const PROFILE_FALLBACK_NAME = "Learner";
+function profileDisplayName(state) {
+  const name = String(state?.profileName || "").trim();
+  return name || PROFILE_FALLBACK_NAME;
+}
+function profileDisplaySemester(state) {
+  return String(state?.profileSemester || "").trim();
+}
 function defaultState() {
   return {
     completed: {},
@@ -404,7 +411,8 @@ function defaultState() {
     queueFocus: "all",
     reviews: {},
     leaderboardName: "",
-    profileSemester: "Semester 3",
+    profileName: "",
+    profileSemester: "",
   };
 }
 function migrateLegacy(old) {
@@ -1119,8 +1127,10 @@ function wrapLines(text, maxChars) {
 // fixed 1080×1350 and rasterized to PNG client-side — no dependencies.
 function buildProfileCardSvg(state) {
   const stats = getStats(state);
-  const semester = escapeHtml(state.profileSemester || "Semester 3");
-  const semW = 60 + (state.profileSemester || "Semester 3").length * 16;
+  const name = profileDisplayName(state);
+  const semesterRaw = profileDisplaySemester(state);
+  const semester = escapeHtml(semesterRaw);
+  const semW = semesterRaw ? 60 + semesterRaw.length * 16 : 0;
   const skills = topSkills(state);
   const lead = skills[0];
   const bio =
@@ -1188,11 +1198,15 @@ function buildProfileCardSvg(state) {
     `<rect x="70" y="66" width="28" height="28" rx="8" fill="url(#gold)"/>` +
     `<text x="84" y="85" text-anchor="middle" font-size="19" font-weight="800" fill="#26241f">S</text>` +
     `<text x="110" y="85" font-size="20" font-weight="800" letter-spacing="2" fill="#2b2923">SEM ASSIST</text>` +
-    `<text x="${W - 70}" y="85" text-anchor="end" font-size="19" font-weight="700" fill="#8b887e">${semester} · ${escapeHtml(monthYear)}</text>` +
+    `<text x="${W - 70}" y="85" text-anchor="end" font-size="19" font-weight="700" fill="#8b887e">${
+      semesterRaw ? `${semester} · ${escapeHtml(monthYear)}` : escapeHtml(monthYear)
+    }</text>` +
     `<circle cx="${W / 2}" cy="250" r="118" fill="url(#gold)"/>` +
-    `<text x="${W / 2}" y="296" text-anchor="middle" font-size="150" font-weight="800" fill="#26241f">${escapeHtml(PROFILE_NAME.slice(0, 1))}</text>` +
-    `<text x="${W / 2}" y="430" text-anchor="middle" font-size="64" font-weight="800" fill="#2b2923">${escapeHtml(PROFILE_NAME)}</text>` +
-    `<g transform="translate(${(W - semW) / 2}, 500)"><rect width="${semW}" height="46" rx="23" fill="#33322e"/><text x="${semW / 2}" y="31" text-anchor="middle" font-size="24" font-weight="700" fill="#f4f1e6">${semester}</text></g>` +
+    `<text x="${W / 2}" y="296" text-anchor="middle" font-size="150" font-weight="800" fill="#26241f">${escapeHtml(name.slice(0, 1))}</text>` +
+    `<text x="${W / 2}" y="430" text-anchor="middle" font-size="64" font-weight="800" fill="#2b2923">${escapeHtml(name)}</text>` +
+    (semesterRaw
+      ? `<g transform="translate(${(W - semW) / 2}, 500)"><rect width="${semW}" height="46" rx="23" fill="#33322e"/><text x="${semW / 2}" y="31" text-anchor="middle" font-size="24" font-weight="700" fill="#f4f1e6">${semester}</text></g>`
+      : "") +
     badgeRects
       .map(
         (r, i) =>
@@ -1302,6 +1316,21 @@ async function copySharePng() {
 }
 function renderProfile(state) {
   const stats = getStats(state);
+  const name = profileDisplayName(state);
+  const avatar = document.getElementById("profileAvatar");
+  if (avatar) avatar.textContent = name.slice(0, 1).toUpperCase();
+  const nameRow = document.getElementById("profileNameRow");
+  if (nameRow) {
+    nameRow.innerHTML =
+      `<h2 class="profile-name">${escapeHtml(name)}</h2>` +
+      `<button class="profile-edit" data-edit-name type="button" aria-label="Edit name" title="Edit name">✎</button>`;
+  }
+  const headline = document.getElementById("welcomeHeadline");
+  if (headline) {
+    headline.innerHTML = String(state.profileName || "").trim()
+      ? `Welcome in, <em>${escapeHtml(name)}.</em>`
+      : "Welcome in.";
+  }
   const badges = document.getElementById("profileBadges");
   if (badges) {
     badges.innerHTML = topSkills(state)
@@ -1313,8 +1342,11 @@ function renderProfile(state) {
   }
   const role = document.getElementById("profileRole");
   if (role) {
+    const semester = profileDisplaySemester(state);
     role.innerHTML =
-      `<span id="profileSemesterText">${escapeHtml(state.profileSemester || "Semester 3")}</span>` +
+      `<span id="profileSemesterText"${semester ? "" : ' class="profile-semester-empty"'}>${
+        semester ? escapeHtml(semester) : "Add semester"
+      }</span>` +
       `<button class="profile-edit" data-edit-semester type="button" aria-label="Edit semester" title="Edit semester">✎</button>`;
   }
   const bio = document.getElementById("profileBio");
@@ -1354,16 +1386,15 @@ function editSemester() {
   const input = document.createElement("input");
   input.className = "profile-semester-input";
   input.maxLength = 24;
-  input.value = loadState().profileSemester || "Semester 3";
+  input.value = profileDisplaySemester(loadState());
   input.setAttribute("aria-label", "Semester");
   role.innerHTML = "";
   role.appendChild(input);
   input.focus();
   input.select();
   const commit = () => {
-    const value = input.value.trim();
     const state = loadState();
-    state.profileSemester = value || "Semester 3";
+    state.profileSemester = input.value.trim();
     saveState(state);
     renderProfile(state);
   };
@@ -1372,7 +1403,36 @@ function editSemester() {
       event.preventDefault();
       commit();
     } else if (event.key === "Escape") {
-      input.value = loadState().profileSemester || "Semester 3";
+      input.value = profileDisplaySemester(loadState());
+      renderProfile(loadState());
+    }
+  });
+  input.addEventListener("blur", commit);
+}
+function editProfileName() {
+  const row = document.getElementById("profileNameRow");
+  if (!row) return;
+  const input = document.createElement("input");
+  input.className = "profile-name-input";
+  input.maxLength = 30;
+  input.value = String(loadState().profileName || "");
+  input.setAttribute("aria-label", "Name");
+  row.innerHTML = "";
+  row.appendChild(input);
+  input.focus();
+  input.select();
+  const commit = () => {
+    const state = loadState();
+    state.profileName = input.value.trim();
+    saveState(state);
+    renderProfile(state);
+  };
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commit();
+    } else if (event.key === "Escape") {
+      input.value = String(loadState().profileName || "");
       renderProfile(loadState());
     }
   });
@@ -2502,10 +2562,11 @@ async function init() {
   document.getElementById("signOut").addEventListener("click", () => {
     ensureSupabase().then(sb => sb?.auth.signOut());
   });
-  const profileRole = document.getElementById("profileRole");
-  if (profileRole) {
-    profileRole.addEventListener("click", event => {
+  const profileCard = document.querySelector(".profile-card");
+  if (profileCard) {
+    profileCard.addEventListener("click", event => {
       if (event.target.closest("[data-edit-semester]")) editSemester();
+      else if (event.target.closest("[data-edit-name]")) editProfileName();
     });
   }
   const boardNameSave = document.getElementById("leaderboardNameSave");

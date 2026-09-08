@@ -1188,14 +1188,21 @@ const profileSeed = () => ({
   customTasks: [],
   resources: [],
   focus: { days: {}, sessions: [] },
+  profileName: "Riya",
+  profileSemester: "Semester 3",
 });
 
 describe("profile card", () => {
-  it("renders semester, skill badges, metrics, and the pulse chart", async () => {
+  it("renders the editable name, semester, badges, metrics, and the pulse chart", async () => {
     const { doc } = await bootApp({
       preSeed: { [STORAGE_KEY]: JSON.stringify(profileSeed()) },
     });
+    expect(
+      text(byId(doc, "profileNameRow")!.querySelector(".profile-name")!)
+    ).toBe("Riya");
     expect(text(byId(doc, "profileSemesterText"))).toBe("Semester 3");
+    expect(text(byId(doc, "profileAvatar"))).toBe("R");
+    expect(text(byId(doc, "welcomeHeadline"))).toContain("Riya");
     const badges = [
       ...doc.querySelectorAll("#profileBadges .profile-badge"),
     ].map(badge => badge.textContent?.trim());
@@ -1262,9 +1269,48 @@ describe("profile card", () => {
     const svg = byId(doc, "sharePreview")!.innerHTML;
     expect(svg.startsWith("<svg")).toBe(true);
     expect(svg).toContain("SEM ASSIST");
-    expect(svg).toContain("Sujay");
+    expect(svg).toContain("Riya");
     expect(svg).toContain("Semester 3");
     byId(doc, "shareClose")!.click();
     expect(overlay.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("starts fully neutral for fresh visitors, then personalizes from editable name and semester", async () => {
+    const { app, doc } = await bootApp();
+    expect(
+      text(byId(doc, "profileNameRow")!.querySelector(".profile-name")!)
+    ).toBe("Learner");
+    expect(text(byId(doc, "profileAvatar"))).toBe("L");
+    expect(text(byId(doc, "welcomeHeadline"))).toBe("Welcome in.");
+    expect(text(byId(doc, "profileSemesterText"))).toBe("Add semester");
+    // The share card is neutral too.
+    const svg = (app as { buildProfileCardSvg(state: object): string }).buildProfileCardSvg(
+      (app as { loadState(): object }).loadState()
+    );
+    expect(svg).toContain("Learner");
+    expect(svg).not.toContain("Semester 3");
+    expect(svg).not.toContain("Riya");
+  });
+
+  it("edits the name inline, updates the greeting and avatar, and persists it", async () => {
+    const { doc } = await bootApp();
+    byId(doc, "profileNameRow")!
+      .querySelector<HTMLElement>("[data-edit-name]")!
+      .click();
+    const input = doc.querySelector<HTMLInputElement>(".profile-name-input")!;
+    input.value = "Aarav";
+    input.dispatchEvent(
+      new doc.defaultView!.KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    expect(
+      text(byId(doc, "profileNameRow")!.querySelector(".profile-name")!)
+    ).toBe("Aarav");
+    expect(text(byId(doc, "profileAvatar"))).toBe("A");
+    expect(text(byId(doc, "welcomeHeadline"))).toContain("Aarav");
+    expect((stored(doc) as Record<string, unknown>).profileName).toBe("Aarav");
   });
 });

@@ -496,7 +496,7 @@ describe("wrapLines", () => {
 });
 
 describe("buildProfileCardSvg", () => {
-  it("renders a self-contained SVG with the profile and stats", () => {
+  it("renders a self-contained SVG with a neutral fallback profile and stats", () => {
     const state = defaultState();
     state.completed = {
       "python-1": true,
@@ -509,8 +509,7 @@ describe("buildProfileCardSvg", () => {
     const svg = buildProfileCardSvg(state);
     expect(svg.startsWith("<svg")).toBe(true);
     expect(svg).toContain("SEM ASSIST");
-    expect(svg).toContain("Sujay");
-    expect(svg).toContain("Semester 3");
+    expect(svg).toContain("Learner"); // neutral fallback name
     expect(svg).toContain("6/76");
     expect(svg).toContain("60"); // 6 × 10 proof points
     expect(svg).toContain("Python");
@@ -518,10 +517,23 @@ describe("buildProfileCardSvg", () => {
     expect(svg).toContain("W5");
   });
 
-  it("escapes user-supplied semester text", () => {
+  it("uses the editable name and semester when set", () => {
     const state = defaultState();
+    state.profileName = "Riya";
+    state.profileSemester = "Semester 5";
+    const svg = buildProfileCardSvg(state);
+    expect(svg).toContain("Riya");
+    expect(svg).toContain("Semester 5");
+    expect(svg).toContain("R"); // avatar initial
+  });
+
+  it("escapes user-supplied name and semester text", () => {
+    const state = defaultState();
+    state.profileName = "<img src=x>";
     state.profileSemester = "<Semester 5>";
     const svg = buildProfileCardSvg(state);
+    expect(svg).not.toContain("<img");
+    expect(svg).toContain("&lt;img src=x&gt;");
     expect(svg).not.toContain("<Semester");
     expect(svg).toContain("&lt;Semester 5&gt;");
   });
