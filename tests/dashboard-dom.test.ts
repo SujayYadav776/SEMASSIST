@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { bootApp, byId, stored, text } from "./helpers";
+import {
+  STORAGE_KEY,
+  bootApp,
+  byId,
+  makeFakeSupabase,
+  stored,
+  text,
+} from "./helpers";
 
 describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
   it("renders all track cards on boot without a session", async () => {
@@ -1034,5 +1041,230 @@ describe("focus journal", () => {
       sessions: Array<Record<string, unknown>>;
     };
     expect(focus.sessions).toEqual([{ date: today, minutes: 1 }]);
+  });
+});
+
+const LB_CONFIG = {
+  url: "https://supabase.example.co",
+  anonKey: "anon-key-1",
+  redirectUrl: "http://localhost:3000/study-dashboard.html",
+};
+const lbSleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// A minimal signed-in boot against the injected fake Supabase client.
+const bootSignedIn = async (fake: ReturnType<typeof makeFakeSupabase>) =>
+  bootApp({
+    supabaseConfig: LB_CONFIG,
+    supabaseClientFactory: () => fake,
+  });
+
+describe("weekly leaderboard", () => {
+  it("renders the board on sign-in and marks your own row", async () => {
+    const fake = makeFakeSupabase({
+      leaderboardRows: [
+        { user_id: "user-1", display_name: "Sujay", points: 120 },
+        { user_id: "user-2", display_name: "Priya", points: 90 },
+        { user_id: "user-3", points: 40 },
+      ],
+    });
+    const { doc } = await bootSignedIn(fake);
+    await lbSleep(60);
+    const block = byId(doc, "leaderboardBlock")!;
+    expect(block.hasAttribute("hidden")).toBe(false);
+    const list = text(byId(doc, "leaderboardList"))!;
+    expect(list).toContain("Sujay");
+    expect(list).toContain("120");
+    expect(list).toContain("Priya");
+    expect(list).toContain("Learner");
+    expect(doc.querySelector(".lb-row.you span")?.textContent).toBe("Sujay");
+    expect(text(byId(doc, "leaderboardMine"))).toBe("You · 120 pts · #1");
+  });
+
+  it("awards +10 when verifying a checkpoint and the board reflects it", async () => {
+    const fake = makeFakeSupabase();
+    const { doc } = await bootSignedIn(fake);
+    await lbSleep(60);
+    doc
+      .querySelector<HTMLInputElement>(
+        '.task-row[data-task-id="python-1"] .check'
+      )!
+      .click();
+    await lbSleep(800);
+    expect(fake.rpcCalls).toContainEqual(
+      expect.objectContaining({
+        name: "earn_points",
+        args: expect.objectContaining({ p_amount: 10 }),
+      })
+    );
+    expect(text(byId(doc, "leaderboardMine"))).toBe("You · 10 pts · #1");
+  });
+
+  it("subtracts 10 when unverifying a checkpoint", async () => {
+    const fake = makeFakeSupabase({
+      leaderboardRows: [
+        { user_id: "user-1", display_name: "Sujay", points: 10 },
+      ],
+    });
+    const { doc } = await bootApp({
+      preSeed: {
+        [STORAGE_KEY]: JSON.stringify({
+          completed: { "python-1": true },
+          completedAt: { "python-1": "2026-09-01" },
+          activity: { "2026-09-01": 1 },
+          customTasks: [],
+          resources: [],
+          focus: { days: {}, sessions: [] },
+        }),
+      },
+      supabaseConfig: LB_CONFIG,
+      supabaseClientFactory: () => fake,
+    });
+    await lbSleep(60);
+    doc
+      .querySelector<HTMLInputElement>(
+        '.task-row[data-task-id="python-1"] .check'
+      )!
+      .click();
+    await lbSleep(800);
+    expect(fake.rpcCalls).toContainEqual(
+      expect.objectContaining({
+        name: "earn_points",
+        args: expect.objectContaining({ p_amount: -10 }),
+      })
+    );
+  });
+
+  it("awards a point per focus minute when a session is recorded", async () => {
+    const fake = makeFakeSupabase();
+    const { doc } = await bootSignedIn(fake);
+    await lbSleep(60);
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    (doc.getElementById("timerStart") as HTMLButtonElement).click();
+    vi.advanceTimersByTime(60_000);
+    (doc.getElementById("timerPause") as HTMLButtonElement).click();
+    vi.useRealTimers();
+    await lbSleep(120);
+    expect(fake.rpcCalls).toContainEqual(
+      expect.objectContaining({
+        args: expect.objectContaining({ p_amount: 1 }),
+      })
+    );
+  });
+
+  it("hides the board entirely when signed out", async () => {
+    const { doc } = await bootApp();
+    expect(byId(doc, "leaderboardBlock")!.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("saving a nickname persists it and syncs the display name", async () => {
+    const fake = makeFakeSupabase();
+    const { doc } = await bootSignedIn(fake);
+    await lbSleep(60);
+    const input = byId(doc, "leaderboardName") as HTMLInputElement;
+    input.value = "Ace";
+    byId(doc, "leaderboardNameSave")!.click();
+    await lbSleep(120);
+    expect((stored(doc) as Record<string, unknown>).leaderboardName).toBe("Ace");
+    expect(fake.rpcCalls).toContainEqual(
+      expect.objectContaining({
+        name: "earn_points",
+        args: expect.objectContaining({ p_display_name: "Ace", p_amount: 0 }),
+      })
+    );
+  });
+});
+
+const profileSeed = () => ({
+  completed: {
+    "python-1": true,
+    "python-2": true,
+    "python-3": true,
+    "python-4": true,
+    "python30-1": true,
+    "python30-2": true,
+  },
+  completedAt: { "python-1": "2026-09-01" },
+  activity: {},
+  customTasks: [],
+  resources: [],
+  focus: { days: {}, sessions: [] },
+});
+
+describe("profile card", () => {
+  it("renders semester, skill badges, metrics, and the pulse chart", async () => {
+    const { doc } = await bootApp({
+      preSeed: { [STORAGE_KEY]: JSON.stringify(profileSeed()) },
+    });
+    expect(text(byId(doc, "profileSemesterText"))).toBe("Semester 3");
+    const badges = [
+      ...doc.querySelectorAll("#profileBadges .profile-badge"),
+    ].map(badge => badge.textContent?.trim());
+    expect(badges).toEqual(["Python", "30 Days of Python", "Java"]);
+    expect(text(byId(doc, "profileBio"))).toContain(
+      "6 of 76 checkpoints verified"
+    );
+    const metrics = text(byId(doc, "profileMetrics"))!;
+    expect(metrics).toContain("6/76");
+    expect(metrics).toContain("0d");
+    expect(metrics).toContain("0m");
+    expect(metrics).toContain("60 pts");
+    const chart = byId(doc, "pulseChart")!.innerHTML;
+    expect(chart).toContain("<svg");
+    expect(chart).toContain("W5");
+    expect(chart).toContain("polyline");
+    expect(text(byId(doc, "focusCount"))).toBe("4 / 12");
+  });
+
+  it("edits the semester inline and persists it", async () => {
+    const { doc } = await bootApp();
+    byId(doc, "profileRole")!
+      .querySelector<HTMLElement>("[data-edit-semester]")!
+      .click();
+    const input = doc.querySelector<HTMLInputElement>(
+      ".profile-semester-input"
+    )!;
+    input.value = "Semester 5";
+    input.dispatchEvent(
+      new doc.defaultView!.KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    expect(text(byId(doc, "profileSemesterText"))).toBe("Semester 5");
+    expect((stored(doc) as Record<string, unknown>).profileSemester).toBe(
+      "Semester 5"
+    );
+  });
+
+  it("refreshes the profile metrics when a checkpoint is toggled", async () => {
+    const { doc } = await bootApp({
+      preSeed: { [STORAGE_KEY]: JSON.stringify(profileSeed()) },
+    });
+    expect(text(byId(doc, "profileMetrics"))).toContain("60 pts");
+    doc
+      .querySelector<HTMLInputElement>(
+        '.task-row[data-task-id="python-5"] .check'
+      )!
+      .click();
+    expect(text(byId(doc, "profileMetrics"))).toContain("70 pts");
+    expect(text(byId(doc, "profileBio"))).toContain("7 of 76");
+  });
+
+  it("opens the share overlay with the exported card SVG and closes it", async () => {
+    const { doc } = await bootApp({
+      preSeed: { [STORAGE_KEY]: JSON.stringify(profileSeed()) },
+    });
+    const overlay = byId(doc, "shareOverlay")!;
+    expect(overlay.hasAttribute("hidden")).toBe(true);
+    byId(doc, "shareProfile")!.click();
+    expect(overlay.hasAttribute("hidden")).toBe(false);
+    const svg = byId(doc, "sharePreview")!.innerHTML;
+    expect(svg.startsWith("<svg")).toBe(true);
+    expect(svg).toContain("SEM ASSIST");
+    expect(svg).toContain("Sujay");
+    expect(svg).toContain("Semester 3");
+    byId(doc, "shareClose")!.click();
+    expect(overlay.hasAttribute("hidden")).toBe(true);
   });
 });

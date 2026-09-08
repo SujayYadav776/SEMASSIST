@@ -390,6 +390,9 @@ const dateKey = date => {
   return local.toISOString().slice(0, 10);
 };
 const todayKey = () => dateKey(new Date());
+const CHECKPOINT_POINTS = 10;
+const SEMESTER_WEEKS = 16;
+const PROFILE_NAME = "Sujay";
 function defaultState() {
   return {
     completed: {},
@@ -400,6 +403,8 @@ function defaultState() {
     focus: { days: {}, sessions: [] },
     queueFocus: "all",
     reviews: {},
+    leaderboardName: "",
+    profileSemester: "Semester 3",
   };
 }
 function migrateLegacy(old) {
@@ -910,6 +915,469 @@ function renderMissionQueue(state) {
     )
     .join("");
 }
+// Monday-UTC of the week containing the given date — must match the
+// date_trunc('week', now()) the earn_points RPC uses for weekly_points rows.
+function weekStartKey(date = new Date()) {
+  const day = (date.getUTCDay() + 6) % 7;
+  const monday = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() - day)
+  );
+  return monday.toISOString().slice(0, 10);
+}
+let leaderboardTimer = null;
+function scheduleLeaderboardRefresh() {
+  clearTimeout(leaderboardTimer);
+  leaderboardTimer = setTimeout(refreshLeaderboard, 400);
+}
+// Fire-and-forget leaderboard point award. Never surfaces an error toast — it
+// is a best-effort social layer, independent of the (toasting) progress save.
+async function awardPoints(amount) {
+  if (!currentUser) return;
+  const sb = await ensureSupabase();
+  if (!sb) return;
+  const name = String(loadState().leaderboardName || "")
+    .trim()
+    .slice(0, 16);
+  try {
+    await sb.rpc("earn_points", {
+      p_user_id: currentUser.id,
+      p_amount: amount,
+      p_display_name: name || null,
+    });
+  } catch {
+    return;
+  }
+  scheduleLeaderboardRefresh();
+}
+function saveLeaderboardName() {
+  const input = document.getElementById("leaderboardName");
+  if (!input) return;
+  const state = loadState();
+  state.leaderboardName = String(input.value || "")
+    .trim()
+    .slice(0, 16);
+  saveState(state);
+  input.value = state.leaderboardName;
+  awardPoints(0); // sync the display name to the board row immediately
+  showToast("Leaderboard nickname saved.");
+}
+async function refreshLeaderboard() {
+  const block = document.getElementById("leaderboardBlock");
+  const list = document.getElementById("leaderboardList");
+  const mine = document.getElementById("leaderboardMine");
+  if (!block || !list || !mine) return;
+  if (!currentUser) {
+    block.hidden = true;
+    return;
+  }
+  const sb = await ensureSupabase();
+  if (!sb) {
+    block.hidden = true;
+    return;
+  }
+  block.hidden = false;
+  const nameInput = document.getElementById("leaderboardName");
+  if (nameInput && !nameInput.matches(":focus")) {
+    nameInput.value = loadState().leaderboardName || "";
+  }
+  const [{ data: topData, error: topError }, { data: mineData }] =
+    await Promise.all([
+      sb
+        .from("weekly_points")
+        .select("user_id, display_name, points")
+        .eq("week_start", weekStartKey())
+        .order("points", { ascending: false })
+        .limit(5),
+      sb
+        .from("weekly_points")
+        .select("user_id, display_name, points")
+        .eq("user_id", currentUser.id)
+        .eq("week_start", weekStartKey())
+        .maybeSingle(),
+    ]);
+  if (topError) {
+    // Table missing or unreachable: show the honest empty state rather than a
+    // blank block (e.g. before supabase/schema.sql has been applied once).
+    list.innerHTML =
+      `<p class="lb-empty">No points yet this week — be the first.</p>`;
+    mine.textContent = "";
+    return;
+  }
+  const top = (topData || []).filter(row => Number(row.points) > 0);
+  const me =
+    mineData && Number(mineData.points) > 0 ? mineData : null;
+  const myRank = me
+    ? top.findIndex(row => row.user_id === me.user_id) + 1
+    : 0;
+  const medal = index =>
+    index === 0 ? " medal-1" : index === 1 ? " medal-2" : index === 2 ? " medal-3" : "";
+  const rowHtml = (row, rank) =>
+    `<div class="lb-row${medal(rank - 1)}${row.user_id === currentUser.id ? " you" : ""}">` +
+    `<i>${rank}</i><span>${escapeHtml(String(row.display_name || "").trim() || "Learner")}</span>` +
+    `<b>${Number(row.points)}</b></div>`;
+  const rows = top.map((row, index) => rowHtml(row, index + 1)).join("");
+  const youOutside = me && myRank === 0;
+  list.innerHTML =
+    rows + (youOutside ? `<div class="lb-sep"></div>${rowHtml(me, "…")}` : "") ||
+    `<p class="lb-empty">No points yet this week — be the first.</p>`;
+  mine.textContent = me
+    ? `You · ${me.points} pts${myRank ? ` · #${myRank}` : ""}`
+    : "";
+}
+// The three most-advanced tracks, shown as the profile's skill badges.
+function topSkills(state) {
+  const stats = getStats(state);
+  return [...tracks]
+    .sort((a, b) => stats.byTrack[b.id].done - stats.byTrack[a.id].done)
+    .slice(0, 3);
+}
+// Five-week completion series (this week last) plus the weekly pace needed to
+// finish the semester on schedule.
+function weeklySeries(state) {
+  const stats = getStats(state);
+  const now = new Date();
+  const offset = (now.getDay() + 6) % 7; // days since Monday (local)
+  const you = [];
+  for (let k = 4; k >= 0; k--) {
+    const monday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() - offset - k * 7
+    );
+    let count = 0;
+    for (let day = 0; day < 7; day++) {
+      const d = new Date(
+        monday.getFullYear(),
+        monday.getMonth(),
+        monday.getDate() + day
+      );
+      const key = dateKey(d);
+      if (key > todayKey()) break;
+      count += Number((state.activity || {})[key]) || 0;
+    }
+    you.push(count);
+  }
+  const pace = Math.max(1, Math.ceil(stats.total / SEMESTER_WEEKS));
+  return { labels: ["W1", "W2", "W3", "W4", "W5"], you, pace };
+}
+function buildPulseSvg(series) {
+  const { labels, you, pace } = series;
+  const n = you.length;
+  const W = 280;
+  const H = 120;
+  const padX = 14;
+  const padTop = 30;
+  const padBottom = 26;
+  const maxY = Math.max(pace, ...you, 1);
+  const x = i => padX + (i * (W - padX * 2)) / (n - 1);
+  const y = v => padTop + (1 - v / maxY) * (H - padTop - padBottom);
+  const last = n - 1;
+  const youPts = you.map((v, i) => `${x(i)},${y(v)}`).join(" ");
+  const pacePts = [0, last].map(i => `${x(i)},${y(pace)}`).join(" ");
+  const bubbleX = Math.min(Math.max(x(last) - 34, 2), W - 72);
+  return (
+    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-hidden="true">` +
+    `<line x1="${x(last)}" y1="${y(you[last])}" x2="${x(last)}" y2="${H - padBottom + 3}" stroke="rgba(255,255,255,.28)" stroke-dasharray="3 3"/>` +
+    `<polyline points="${pacePts}" fill="none" stroke="#dfe3ec" stroke-width="1.5" stroke-dasharray="5 4" opacity=".85"/>` +
+    `<polyline points="${youPts}" fill="none" stroke="#f6ce50" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>` +
+    you
+      .map(
+        (v, i) =>
+          `<circle cx="${x(i)}" cy="${y(v)}" r="2.6" fill="#f6ce50"/>`
+      )
+      .join("") +
+    `<rect x="${bubbleX}" y="${y(you[last]) - 25}" width="68" height="18" rx="9" fill="#f6ce50"/>` +
+    `<text x="${bubbleX + 34}" y="${y(you[last]) - 12}" text-anchor="middle" font-size="9" font-weight="800" fill="#332f1e">${you[last]} pts</text>` +
+    labels
+      .map((label, i) =>
+        i === last
+          ? `<circle cx="${x(i)}" cy="${H - padBottom + 9}" r="9" fill="#f6ce50"/><text x="${x(i)}" y="${H - padBottom + 12.5}" text-anchor="middle" font-size="8" font-weight="800" fill="#332f1e">${label}</text>`
+          : `<text x="${x(i)}" y="${H - padBottom + 12.5}" text-anchor="middle" font-size="8" fill="#a7acb8">${label}</text>`
+      )
+      .join("") +
+    `</svg>`
+  );
+}
+function wrapLines(text, maxChars) {
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  for (const word of words) {
+    const candidate = (line ? line + " " : "") + word;
+    if (line && candidate.length > maxChars) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = candidate;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+// Self-contained, shareable SVG of the profile card (avatar, name, semester,
+// skill badges, bio, metric pills, and the study-pulse chart). Rendered at a
+// fixed 1080×1350 and rasterized to PNG client-side — no dependencies.
+function buildProfileCardSvg(state) {
+  const stats = getStats(state);
+  const semester = escapeHtml(state.profileSemester || "Semester 3");
+  const semW = 60 + (state.profileSemester || "Semester 3").length * 16;
+  const skills = topSkills(state);
+  const lead = skills[0];
+  const bio =
+    `${stats.done} of ${stats.total} checkpoints verified.` +
+    (stats.byTrack[lead.id].done > 0 ? ` ${lead.name} leads the way.` : "");
+  const bioLines = wrapLines(bio, 50);
+  const focusDays =
+    state.focus && typeof state.focus.days === "object" ? state.focus.days : {};
+  const focusTotal = Object.values(focusDays).reduce(
+    (sum, value) => sum + (Number(value) || 0),
+    0
+  );
+  const focusLabel =
+    focusTotal >= 60
+      ? `${Math.floor(focusTotal / 60)}h ${focusTotal % 60}m`
+      : `${focusTotal}m`;
+  const metrics = [
+    { label: "Checkpoints", value: `${stats.done}/${stats.total}`, fill: "#f6ce50", ink: "#33301f" },
+    { label: "Streak", value: `${streak(state.activity)}`, fill: "#33322e", ink: "#f2f0e8" },
+    { label: "Focus", value: focusLabel, fill: "url(#striped)", ink: "#4a3d12" },
+    { label: "Proof points", value: `${stats.done * 10}`, fill: "#ffffff", ink: "#33302a" },
+  ];
+  const series = weeklySeries(state);
+  const n = series.you.length;
+  const W = 1080;
+  const H = 1350;
+  const badgeGap = 18;
+  const badgeW = label => 40 + label.length * 15;
+  const totalBadgeW =
+    skills.reduce((sum, track) => sum + badgeW(track.name), 0) +
+    badgeGap * (skills.length - 1);
+  let badgeX = (W - totalBadgeW) / 2;
+  const badgeRects = skills.map(track => {
+    const w = badgeW(track.name);
+    const rect = { x: badgeX, w, color: track.color };
+    badgeX += w + badgeGap;
+    return rect;
+  });
+  const metricGap = 26;
+  const metricW = 232;
+  const metricH = 96;
+  const metricTotal =
+    metrics.length * metricW + (metrics.length - 1) * metricGap;
+  const metricX = i => (W - metricTotal) / 2 + i * (metricW + metricGap);
+  const chartL = 110;
+  const chartR = 790;
+  const chartT = 1050;
+  const chartB = 1190;
+  const maxY = Math.max(series.pace, ...series.you, 1);
+  const cx = i => chartL + (i * (chartR - chartL)) / (n - 1);
+  const cy = v => chartB - (v / maxY) * (chartB - chartT);
+  const youPts = series.you.map((v, i) => `${cx(i)},${cy(v)}`).join(" ");
+  const pacePts = `${cx(0)},${cy(series.pace)} ${cx(n - 1)},${cy(series.pace)}`;
+  const last = n - 1;
+  const monthYear = new Date().toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+  const bubbleX = Math.min(Math.max(cx(last) - 55, chartL + 4), chartR - 116);
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Manrope, -apple-system, 'Segoe UI', Arial, sans-serif">` +
+    `<defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6ce50"/><stop offset="1" stop-color="#e89a3c"/></linearGradient>` +
+    `<pattern id="striped" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="18" height="18" fill="#eec13e"/><rect width="9" height="18" fill="#f6ce50"/></pattern></defs>` +
+    `<rect width="${W}" height="${H}" rx="36" fill="#fcfbf6"/>` +
+    `<rect x="70" y="66" width="28" height="28" rx="8" fill="url(#gold)"/>` +
+    `<text x="84" y="85" text-anchor="middle" font-size="19" font-weight="800" fill="#26241f">S</text>` +
+    `<text x="110" y="85" font-size="20" font-weight="800" letter-spacing="2" fill="#2b2923">SEM ASSIST</text>` +
+    `<text x="${W - 70}" y="85" text-anchor="end" font-size="19" font-weight="700" fill="#8b887e">${semester} · ${escapeHtml(monthYear)}</text>` +
+    `<circle cx="${W / 2}" cy="250" r="118" fill="url(#gold)"/>` +
+    `<text x="${W / 2}" y="296" text-anchor="middle" font-size="150" font-weight="800" fill="#26241f">${escapeHtml(PROFILE_NAME.slice(0, 1))}</text>` +
+    `<text x="${W / 2}" y="430" text-anchor="middle" font-size="64" font-weight="800" fill="#2b2923">${escapeHtml(PROFILE_NAME)}</text>` +
+    `<g transform="translate(${(W - semW) / 2}, 500)"><rect width="${semW}" height="46" rx="23" fill="#33322e"/><text x="${semW / 2}" y="31" text-anchor="middle" font-size="24" font-weight="700" fill="#f4f1e6">${semester}</text></g>` +
+    badgeRects
+      .map(
+        (r, i) =>
+          `<g><rect x="${r.x}" y="580" width="${r.w}" height="48" rx="24" fill="#33322e"/><circle cx="${r.x + 30}" cy="604" r="8" fill="${r.color}"/><text x="${r.x + 48}" y="611" font-size="23" font-weight="700" fill="#e9e7de">${escapeHtml(skills[i].name)}</text></g>`
+      )
+      .join("") +
+    bioLines
+      .map(
+        (line, i) =>
+          `<text x="${W / 2}" y="${684 + i * 40}" text-anchor="middle" font-size="27" font-weight="500" fill="#5a5851">${escapeHtml(line)}</text>`
+      )
+      .join("") +
+    metrics
+      .map((m, i) => {
+        const x = metricX(i);
+        return (
+          `<g><text x="${x + metricW / 2}" y="780" text-anchor="middle" font-size="19" font-weight="700" letter-spacing="2" fill="#8b887e">${escapeHtml(m.label.toUpperCase())}</text>` +
+          `<rect x="${x}" y="794" width="${metricW}" height="${metricH}" rx="20" fill="${m.fill}" stroke="#e3e1d7"/><text x="${x + metricW / 2}" y="856" text-anchor="middle" font-size="42" font-weight="800" fill="${m.ink}">${escapeHtml(m.value)}</text></g>`
+        );
+      })
+      .join("") +
+    `<rect x="80" y="960" width="920" height="300" rx="26" fill="#1a1e29"/>` +
+    `<text x="110" y="1000" font-size="28" font-weight="800" fill="#f4f1e6">Study pulse</text>` +
+    `<circle cx="950" cy="1000" r="7" fill="#f6ce50"/><text x="934" y="1006" text-anchor="end" font-size="20" font-weight="700" fill="#a7acb8">You</text>` +
+    `<line x1="856" y1="1000" x2="908" y2="1000" stroke="#dfe3ec" stroke-width="3" stroke-dasharray="5 5"/><text x="900" y="1006" text-anchor="end" font-size="20" font-weight="700" fill="#a7acb8">Pace</text>` +
+    `<polyline points="${pacePts}" fill="none" stroke="#dfe3ec" stroke-width="3" stroke-dasharray="6 6" opacity=".85"/>` +
+    `<polyline points="${youPts}" fill="none" stroke="#f6ce50" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>` +
+    series.you
+      .map((v, i) => `<circle cx="${cx(i)}" cy="${cy(v)}" r="8" fill="#f6ce50"/>`)
+      .join("") +
+    `<line x1="${cx(last)}" y1="${cy(series.you[last])}" x2="${cx(last)}" y2="${chartB + 2}" stroke="rgba(255,255,255,.35)" stroke-width="2" stroke-dasharray="4 4"/>` +
+    `<rect x="${bubbleX}" y="${cy(series.you[last]) - 46}" width="110" height="32" rx="16" fill="#f6ce50"/><text x="${bubbleX + 55}" y="${cy(series.you[last]) - 25}" text-anchor="middle" font-size="20" font-weight="800" fill="#332f1e">${series.you[last]} pts</text>` +
+    series.labels
+      .map((label, i) =>
+        i === last
+          ? `<circle cx="${cx(i)}" cy="${chartB + 26}" r="15" fill="#f6ce50"/><text x="${cx(i)}" y="${chartB + 32}" text-anchor="middle" font-size="16" font-weight="800" fill="#332f1e">${label}</text>`
+          : `<text x="${cx(i)}" y="${chartB + 34}" text-anchor="middle" font-size="18" fill="#a7acb8">${label}</text>`
+      )
+      .join("") +
+    `<text x="${W / 2}" y="1296" text-anchor="middle" font-size="19" font-weight="700" fill="#8b887e">SEM ASSIST · Placement-ready profile</text>` +
+    `</svg>`
+  );
+}
+async function svgToPngBlob(svgString, width, height) {
+  const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
+  try {
+    const image = new Image();
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = reject;
+      image.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext("2d").drawImage(image, 0, 0, width, height);
+    return await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+function openShareCard() {
+  const overlay = document.getElementById("shareOverlay");
+  const preview = document.getElementById("sharePreview");
+  if (!overlay || !preview) return;
+  preview.innerHTML = buildProfileCardSvg(loadState());
+  overlay.hidden = false;
+}
+function closeShareCard() {
+  const overlay = document.getElementById("shareOverlay");
+  if (overlay) overlay.hidden = true;
+}
+async function downloadSharePng() {
+  const svgString = buildProfileCardSvg(loadState());
+  try {
+    const blob = await svgToPngBlob(svgString, 1080, 1350);
+    if (!blob) {
+      showToast("Could not build the image.");
+      return;
+    }
+    const anchor = document.createElement("a");
+    anchor.href = URL.createObjectURL(blob);
+    anchor.download = `sem-assist-profile-${todayKey()}.png`;
+    anchor.click();
+    URL.revokeObjectURL(anchor.href);
+    showToast("Profile card PNG downloaded.");
+  } catch {
+    showToast("Could not build the image.");
+  }
+}
+async function copySharePng() {
+  const svgString = buildProfileCardSvg(loadState());
+  if (navigator.clipboard && window.ClipboardItem) {
+    try {
+      const blob = await svgToPngBlob(svgString, 1080, 1350);
+      if (blob) {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        showToast("Profile card copied — paste it anywhere.");
+        return;
+      }
+    } catch {
+      /* fall through to download */
+    }
+  }
+  downloadSharePng();
+}
+function renderProfile(state) {
+  const stats = getStats(state);
+  const badges = document.getElementById("profileBadges");
+  if (badges) {
+    badges.innerHTML = topSkills(state)
+      .map(
+        track =>
+          `<span class="profile-badge" style="--dot:${track.color}"><i></i>${escapeHtml(track.name)}</span>`
+      )
+      .join("");
+  }
+  const role = document.getElementById("profileRole");
+  if (role) {
+    role.innerHTML =
+      `<span id="profileSemesterText">${escapeHtml(state.profileSemester || "Semester 3")}</span>` +
+      `<button class="profile-edit" data-edit-semester type="button" aria-label="Edit semester" title="Edit semester">✎</button>`;
+  }
+  const bio = document.getElementById("profileBio");
+  if (bio) {
+    const lead = topSkills(state)[0];
+    const leadPart =
+      stats.byTrack[lead.id].done > 0
+        ? ` ${lead.name} leads the way.`
+        : " The semester is still fresh.";
+    bio.textContent =
+      `${stats.done} of ${stats.total} checkpoints verified.${leadPart}`;
+  }
+  const metrics = document.getElementById("profileMetrics");
+  if (metrics) {
+    const focusDays =
+      state.focus && typeof state.focus.days === "object" ? state.focus.days : {};
+    const focusTotal = Object.values(focusDays).reduce(
+      (sum, value) => sum + (Number(value) || 0),
+      0
+    );
+    const focusLabel =
+      focusTotal >= 60
+        ? `${Math.floor(focusTotal / 60)}h ${focusTotal % 60}m`
+        : `${focusTotal}m`;
+    metrics.innerHTML =
+      `<div class="profile-metric yellow"><span>Checkpoints</span><b>${stats.done}/${stats.total}</b></div>` +
+      `<div class="profile-metric slate"><span>Streak</span><b>${streak(state.activity)}d</b></div>` +
+      `<div class="profile-metric striped"><span>Focus</span><b>${escapeHtml(focusLabel)}</b></div>` +
+      `<div class="profile-metric white"><span>Proof</span><b>${stats.done * 10} pts</b></div>`;
+  }
+  const chart = document.getElementById("pulseChart");
+  if (chart) chart.innerHTML = buildPulseSvg(weeklySeries(state));
+}
+function editSemester() {
+  const role = document.getElementById("profileRole");
+  if (!role) return;
+  const input = document.createElement("input");
+  input.className = "profile-semester-input";
+  input.maxLength = 24;
+  input.value = loadState().profileSemester || "Semester 3";
+  input.setAttribute("aria-label", "Semester");
+  role.innerHTML = "";
+  role.appendChild(input);
+  input.focus();
+  input.select();
+  const commit = () => {
+    const value = input.value.trim();
+    const state = loadState();
+    state.profileSemester = value || "Semester 3";
+    saveState(state);
+    renderProfile(state);
+  };
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commit();
+    } else if (event.key === "Escape") {
+      input.value = loadState().profileSemester || "Semester 3";
+      renderProfile(loadState());
+    }
+  });
+  input.addEventListener("blur", commit);
+}
 function updateSummary(state) {
   const stats = getStats(state);
   document.getElementById("headlineProgress").style.width = stats.percent + "%";
@@ -952,6 +1420,7 @@ function updateSummary(state) {
   renderMissionQueue(state);
   renderReviewQueue(state);
   renderResources(state);
+  renderProfile(state);
 }
 function escapeHtml(value) {
   return String(value).replace(
@@ -1242,8 +1711,9 @@ function updateCalendarSummary(state) {
 }
 function toggleTask(id, trackId, checked) {
   const state = loadState();
+  const wasChecked = Boolean(state.completed[id]);
   state.completed[id] = checked;
-  if (checked) {
+  if (checked && !wasChecked) {
     const date = todayKey();
     state.completedAt[id] = date;
     // A fresh verification restarts the spaced-repetition clock.
@@ -1255,11 +1725,13 @@ function toggleTask(id, trackId, checked) {
     showToast(
       `${tracks.find(track => track.id === trackId).name} checkpoint verified.`
     );
-  } else if (state.completedAt[id]) {
+    awardPoints(CHECKPOINT_POINTS);
+  } else if (!checked && wasChecked && state.completedAt[id]) {
     const date = state.completedAt[id];
     state.activity[date] = Math.max(0, (Number(state.activity[date]) || 0) - 1);
     if (!state.activity[date]) delete state.activity[date];
     delete state.completedAt[id];
+    awardPoints(-CHECKPOINT_POINTS);
   }
   saveState(state);
   renderTracks(state);
@@ -1535,6 +2007,7 @@ function endFocusRun() {
     const state = loadState();
     state.focus.sessions.push({ date: todayKey(), minutes });
     saveState(state);
+    awardPoints(minutes);
   }
   focusCommitted = 0;
 }
@@ -1566,6 +2039,7 @@ async function applySession(user) {
     currentState = loadLocalState();
     renderTracks(currentState);
     updateSummary(currentState);
+    refreshLeaderboard();
     return;
   }
   document.getElementById("signedInEmail").textContent =
@@ -1576,6 +2050,7 @@ async function applySession(user) {
     currentState = loadLocalState();
     renderTracks(currentState);
     updateSummary(currentState);
+    refreshLeaderboard();
     return;
   }
   const {
@@ -1591,6 +2066,7 @@ async function applySession(user) {
     !error && data?.state ? normalizeState(data.state) : loadLocalState();
   renderTracks(currentState);
   updateSummary(currentState);
+  refreshLeaderboard();
   if (!data?.state) saveState(currentState);
 }
 function setAuthMode(signup) {
@@ -1674,12 +2150,15 @@ function buildSemesterReport(state) {
   });
   const journalRows = journals
     .map(session => {
-      const trackName = session.track
-        ? (tracks.find(track => track.id === session.track) || {}).name
-        : "General";
+      const track = session.track
+        ? tracks.find(item => item.id === session.track)
+        : null;
+      const trackName = track ? track.name : "General";
+      const color = track ? track.color : "#c9c6bb";
       const label = session.note || "(no note)";
       return (
-        `<div class="ledger-row"><span class="ledger-date">${escapeHtml(session.date)}</span>` +
+        `<div class="ledger-row"><i class="ld" style="--l:${color}"></i>` +
+        `<span class="ledger-date">${escapeHtml(session.date)}</span>` +
         `<b>${escapeHtml(trackName)}</b><span>${escapeHtml(label)}</span>` +
         `<em>${formatMinutes(Number(session.minutes) || 0)}</em></div>`
       );
@@ -1701,50 +2180,68 @@ function buildSemesterReport(state) {
     .join("");
   return `<!doctype html><html><head><meta charset="utf-8" /><title>Semester evidence report</title>
 <style>
-@page { size: A4; margin: 10mm 11mm 9mm; }
+@page { size: A4; margin: 9mm 11mm 10mm; }
 * { box-sizing: border-box; }
-body { margin: 0; font: 10px/1.35 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #2a2822; background: white; }
-.mast { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #f6ce50; padding-bottom: 7px; margin-bottom: 10px; }
-.mast h1 { margin: 0; font-size: 19px; letter-spacing: -.5px; }
-.mast .sub { color: #6f6c60; font-size: 8.5px; }
-.mast .who { text-align: right; font-size: 9px; }
-.stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 8px; }
-.stat { border: 1px solid #e9e4d4; border-radius: 8px; padding: 6px 8px; }
-.stat b { display: block; font-size: 15px; letter-spacing: -.3px; }
-.stat span { color: #6f6c60; font-size: 7.5px; text-transform: uppercase; letter-spacing: .5px; }
-h2 { margin: 9px 0 5px; font-size: 9.5px; text-transform: uppercase; letter-spacing: .6px; color: #6f6c60; }
-.pt-row { display: grid; grid-template-columns: 120px 1fr 40px; align-items: center; gap: 8px; padding: 2.5px 0; }
-.pt-name i { display: inline-block; width: 6px; height: 6px; border-radius: 2px; background: var(--t); margin-right: 5px; }
-.pt-rail { height: 5px; border-radius: 3px; background: #ece7d8; overflow: hidden; }
-.pt-rail span { display: block; height: 100%; background: var(--t); }
-.pt-row strong { text-align: right; }
-.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.panel { border: 1px solid #e9e4d4; border-radius: 8px; padding: 6px 9px; page-break-inside: avoid; }
+body { margin: 0; font: 9.5px/1.45 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #2a2822; background: white; }
+.topbar { height: 6px; border-radius: 4px 4px 0 0; background: linear-gradient(90deg, #f6ce50, #e89a3c); margin-bottom: 14px; }
+.mast { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 11px; border-bottom: 2px solid #f6ce50; margin-bottom: 13px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.mark { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(140deg, #f6ce50, #e89a3c); color: #26241f; font: 800 20px/1 -apple-system, "Segoe UI", Arial, sans-serif; }
+.brand h1 { margin: 0; font-size: 22px; letter-spacing: -.6px; }
+.brand .sub { color: #6f6c60; font-size: 9px; letter-spacing: .2px; margin-top: 2px; }
+.who { text-align: right; }
+.who b { display: block; font-size: 13px; letter-spacing: -.2px; }
+.who span { display: block; color: #8a867b; font-size: 9px; margin-top: 3px; }
+.stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 6px; }
+.stat { border: 1px solid #ebe6d8; border-radius: 11px; padding: 9px 10px; background: #fff; }
+.stat b { display: block; font-size: 17px; letter-spacing: -.4px; line-height: 1.1; }
+.stat span { display: block; margin-top: 3px; color: #7b776c; font-size: 7px; text-transform: uppercase; letter-spacing: .7px; }
+.stat.hero { border-color: #f0d273; background: linear-gradient(160deg, #fbf3d4, #f8e7ab); }
+.stat.hero b { color: #3a3108; }
+.section-title { display: flex; align-items: center; gap: 7px; margin: 13px 0 7px; font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: #6f6c60; }
+.section-title::before { content: ""; width: 9px; height: 9px; border-radius: 2.5px; background: #f6ce50; }
+.panel { border: 1px solid #ebe6d8; border-radius: 12px; padding: 10px 12px; background: #fdfdfa; page-break-inside: avoid; }
+.panel h3 { margin: 0 0 7px; font-size: 8.5px; text-transform: uppercase; letter-spacing: .7px; color: #6f6c60; }
 .panel p { margin: 0; color: #6f6c60; }
-.ledger-row { display: grid; grid-template-columns: 64px 66px 1fr 34px; gap: 6px; padding: 2.5px 0; border-top: 1px dotted #e7e1d1; }
+.pt-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) 34px; align-items: center; gap: 9px; padding: 3.5px 0; }
+.pt-name { display: flex; align-items: center; min-width: 0; }
+.pt-name i { display: inline-block; width: 7px; height: 7px; border-radius: 2px; background: var(--t); margin-right: 6px; }
+.pt-rail { height: 6px; border-radius: 999px; background: #ece7d8; overflow: hidden; }
+.pt-rail span { display: block; height: 100%; border-radius: 999px; background: var(--t); }
+.pt-row strong { text-align: right; font-size: 10px; }
+.two { display: grid; grid-template-columns: 1.08fr 1fr; gap: 10px; margin-top: 4px; }
+.ledger-row { display: grid; grid-template-columns: 6px 60px 62px minmax(0, 1fr) 36px; gap: 7px; align-items: center; padding: 4px 0; border-top: 1px dotted #e7e1d1; }
+.ledger-row .ld { width: 6px; height: 18px; border-radius: 999px; background: var(--l, #c9c6bb); }
 .ledger-row .ledger-date { color: #8a867b; }
-.ledger-row em { font-style: normal; text-align: right; }
-.shelf { display: flex; flex-wrap: wrap; gap: 4px; padding: 0; margin: 0; list-style: none; }
-.shelf li { border: 1px solid #e9e4d4; border-radius: 999px; padding: 2px 8px; font-size: 8.5px; }
-.foot { display: flex; justify-content: space-between; margin-top: 10px; border-top: 1px solid #ece7d8; padding-top: 6px; color: #8a867b; font-size: 8px; }
-</style></head><body><div class="sheet">
-<div class="mast"><div><h1>SEM ASSIST</h1><div class="sub">Semester evidence report</div></div><div class="who"><b>${escapeHtml(person)}</b><br />${escapeHtml(today)}</div></div>
+.ledger-row b { font-size: 9.5px; }
+.ledger-row em { font-style: normal; text-align: right; font-weight: 700; }
+.shelf { display: flex; flex-wrap: wrap; gap: 5px; padding: 0; margin: 7px 0 0; list-style: none; }
+.shelf li { border: 1px solid #e9e4d4; border-radius: 999px; padding: 3px 9px; font-size: 8.5px; background: #fff; }
+.foot { display: flex; justify-content: space-between; align-items: center; margin-top: 13px; border-top: 1px solid #ece7d8; padding-top: 8px; color: #8a867b; font-size: 8px; }
+.foot .mark-chip { display: inline-flex; align-items: center; gap: 6px; color: #6f6c60; }
+.foot .mark-chip::before { content: ""; width: 9px; height: 9px; border-radius: 3px; background: linear-gradient(140deg, #f6ce50, #e89a3c); }
+</style></head><body>
+<div class="topbar"></div>
+<div class="mast">
+<div class="brand"><span class="mark">S</span><div><h1>SEM ASSIST</h1><div class="sub">Semester evidence report</div></div></div>
+<div class="who"><b>${escapeHtml(person)}</b><span>${escapeHtml(today)}</span></div>
+</div>
 <div class="stats">
-<div class="stat"><b>${stats.percent}%</b><span>Verified</span></div>
+<div class="stat hero"><b>${stats.percent}%</b><span>Verified</span></div>
 <div class="stat"><b>${stats.done}/${stats.total}</b><span>Checkpoints</span></div>
 <div class="stat"><b>${streak(state.activity)}</b><span>Day streak</span></div>
 <div class="stat"><b>${stats.done * 10}</b><span>Proof points</span></div>
 <div class="stat"><b>${formatMinutes(focusTotal)}</b><span>Focused</span></div>
 <div class="stat"><b>${activeDays}</b><span>Active days</span></div>
 </div>
-<h2>Semester pulse</h2>
+<div class="section-title">Semester pulse</div>
 <div class="panel">${trackRows}</div>
 <div class="two">
-<div class="panel"><h2 style="margin-top:8px">Deep-work ledger</h2>${journalRows || "<p>No focus sessions journaled yet.</p>"}</div>
-<div class="panel"><h2 style="margin-top:8px">Reference shelf</h2><p>${stats.customDone}/${stats.customTotal} personal tasks · ${resources.length} resources saved</p>${shelf ? `<ul class="shelf">${shelf}</ul>` : ""}</div>
+<div class="panel"><h3>Deep-work ledger</h3>${journalRows || "<p>No focus sessions journaled yet.</p>"}</div>
+<div class="panel"><h3>Reference shelf</h3><p>${stats.customDone}/${stats.customTotal} personal tasks · ${resources.length} resources saved</p>${shelf ? `<ul class="shelf">${shelf}</ul>` : ""}</div>
 </div>
-<div class="foot"><span>Prepared with SEM ASSIST on ${escapeHtml(today)}.</span><span class="report-mark">Evidence kept locally in this browser.</span></div>
-</div></body></html>`;
+<div class="foot"><span>Prepared with SEM ASSIST on ${escapeHtml(today)}.</span><span class="mark-chip">Evidence kept locally in this browser</span></div>
+</body></html>`;
 }
 async function init() {
   initCookieBanner();
@@ -1824,8 +2321,10 @@ async function init() {
     // While the focus journal is open, its own Enter/Escape handling wins.
     const journalOverlay = document.getElementById("journalOverlay");
     const reportOverlay = document.getElementById("reportOverlay");
+    const shareOverlay = document.getElementById("shareOverlay");
     if (journalOverlay && !journalOverlay.hidden) return;
     if (reportOverlay && !reportOverlay.hidden) return;
+    if (shareOverlay && !shareOverlay.hidden) return;
     if (event.key === "/") {
       event.preventDefault();
       const search = document.getElementById("search");
@@ -1944,6 +2443,24 @@ async function init() {
       reportOverlayEl.hidden = true;
     }
   });
+  // Share profile card: preview the SVG card and export it as a PNG (copy or
+  // download) for placement-prep conversations.
+  const shareOverlayEl = document.getElementById("shareOverlay");
+  if (shareOverlayEl) {
+    document.getElementById("shareProfile").addEventListener("click", () => {
+      openShareCard();
+      document.getElementById("shareClose").focus();
+    });
+    document.getElementById("shareClose").addEventListener("click", closeShareCard);
+    document.getElementById("sharePng").addEventListener("click", downloadSharePng);
+    document.getElementById("shareCopy").addEventListener("click", copySharePng);
+    shareOverlayEl.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        shareOverlayEl.hidden = true;
+      }
+    });
+  }
   document.getElementById("exportData").addEventListener("click", () => {
     const link = document.createElement("a");
     link.href = URL.createObjectURL(
@@ -1985,11 +2502,25 @@ async function init() {
   document.getElementById("signOut").addEventListener("click", () => {
     ensureSupabase().then(sb => sb?.auth.signOut());
   });
+  const profileRole = document.getElementById("profileRole");
+  if (profileRole) {
+    profileRole.addEventListener("click", event => {
+      if (event.target.closest("[data-edit-semester]")) editSemester();
+    });
+  }
+  const boardNameSave = document.getElementById("leaderboardNameSave");
+  if (boardNameSave) {
+    boardNameSave.addEventListener("click", saveLeaderboardName);
+    document.getElementById("leaderboardName").addEventListener("keydown", event => {
+      if (event.key === "Enter") saveLeaderboardName();
+    });
+  }
   setAuthMode(false);
   setTimer();
   currentState = loadLocalState();
   renderTracks(currentState);
   updateSummary(currentState);
+  refreshLeaderboard();
   window.addEventListener("pagehide", keepaliveFlush);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") keepaliveFlush();
@@ -2045,4 +2576,10 @@ export {
   markReviewSolid,
   markReviewRedo,
   buildSemesterReport,
+  weekStartKey,
+  refreshLeaderboard,
+  weeklySeries,
+  renderProfile,
+  buildProfileCardSvg,
+  wrapLines,
 };

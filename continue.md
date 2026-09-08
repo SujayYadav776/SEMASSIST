@@ -108,6 +108,22 @@ The public key cannot create schema or modify Supabase settings. Before authenti
    - Redirect URL: `http://localhost:3000/study-dashboard.html` and `https://semassist.runs-on.dev/study-dashboard.html`.
 4. `supabase-config.js` derives `redirectUrl` from `window.location.origin`, so no code change is needed between environments — just ensure every deployed origin is allowlisted in Supabase's URL Configuration.
 
+#### Applying the database schema (fixes the cloud-save error)
+
+Running `supabase/schema.sql` is step 1 above, but it is the single most important manual step. Until it is applied, the dashboard's cloud save fails and the user sees a **"Could not save progress. Please try again."** toast on every change; the **Weekly leaderboard** also stays empty. Applying the schema resolves both at once.
+
+How to run it (one time, project owner only):
+
+1. Go to https://supabase.com/dashboard and open the project `nrxbelpmydquivcphxry`.
+2. In the left sidebar, open **SQL Editor** and click **New query** (or **+ New**).
+3. Open `supabase/schema.sql` and paste its full contents into the editor.
+4. Click **Run** (or **▶ Run**). The query is idempotent (`if not exists` / `create or replace`), so re-running it is safe.
+5. Confirm the results panel shows success. It should create the `study_progress` and `weekly_points` tables, enable Row Level Security with the per-user policies, and create the `earn_points` function plus its `authenticated` grant.
+
+Smoke-test after applying: sign in on the dashboard and verify a checkpoint tick no longer shows the "Could not save progress" toast, and that the **This week's board** block (Weekly rhythm card) lists real points once you have earned some.
+
+Changes to `schema.sql` (e.g. a new table for a future feature) require re-applying only the new statements — paste the updated file and run it again; existing tables are left intact.
+
 The app must be served over HTTP(S), not opened directly as a `file://` URL, for Supabase email confirmation redirects to work. The in-app browser was observed opening the static file directly, so this caveat remains important.
 
 ## Development and verification

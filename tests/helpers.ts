@@ -13,10 +13,17 @@ export interface FakeSupabaseOptions {
   existingState?: Record<string, unknown> | null;
   /** How many consecutive upsert attempts should fail with an error. */
   failFirstUpserts?: number;
+  /** Seed rows for the weekly_points leaderboard table. */
+  leaderboardRows?: Array<{
+    user_id: string;
+    display_name?: string;
+    points: number;
+  }>;
 }
 
 export interface FakeSupabase {
   upserts: Array<Record<string, unknown>>;
+  rpcCalls: Array<{ name: string; args: Record<string, unknown> }>;
   auth: {
     getSession(): Promise<{
       data: {
@@ -32,6 +39,7 @@ export interface FakeSupabase {
     signInWithPassword(): Promise<{ data: { session: null }; error: null }>;
   };
   from(): unknown;
+  rpc(name: string, args: Record<string, unknown>): Promise<{ error: null }>;
 }
 
 /** Minimal fake mirroring the supabase-js surface the dashboard uses. */
@@ -39,12 +47,49 @@ export function makeFakeSupabase(
   options: FakeSupabaseOptions = {}
 ): FakeSupabase & { upserts: Array<Record<string, unknown>> } {
   const upserts: Array<Record<string, unknown>> = [];
+  const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  const weekly = new Map<
+    string,
+    { user_id: string; display_name: string; points: number }
+  >();
+  for (const row of options.leaderboardRows ?? []) {
+    weekly.set(row.user_id, {
+      user_id: row.user_id,
+      display_name: row.display_name ?? "",
+      points: row.points,
+    });
+  }
   const session = {
     user: { id: "user-1", email: "test@example.com" },
     access_token: "TEST_ACCESS_TOKEN",
   };
   let failuresLeft = options.failFirstUpserts ?? 0;
-  const from = () => {
+  const from = (table: string) => {
+    if (table === "weekly_points") {
+      const filters: Array<{ key: string; value: string }> = [];
+      const sorted = () =>
+        [...weekly.values()].sort((a, b) => b.points - a.points);
+      const chain = {
+        select: () => chain,
+        eq: (key: string, value: string) => {
+          filters.push({ key, value });
+          return chain;
+        },
+        order: () => chain,
+        limit: async () => ({ data: sorted(), error: null }),
+        maybeSingle: async () => {
+          const rows = sorted().filter(row =>
+            filters.every(
+              f =>
+                f.key === "week_start" || // every row is the current week
+                String(row[f.key as keyof typeof row]) === f.value
+            )
+          );
+          return { data: rows[0] ?? null, error: null };
+        },
+      };
+      return chain;
+    }
     const chain = {
       maybeSingle: async () =>
         options.existingState
@@ -68,6 +113,7 @@ export function makeFakeSupabase(
   };
   return {
     upserts,
+    rpcCalls,
     auth: {
       getSession: async () => ({ data: { session } }),
       signOut: async () => ({ error: null }),
@@ -81,6 +127,22 @@ export function makeFakeSupabase(
       }),
     },
     from,
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      rpcCalls.push({ name, args: structuredClone(args) });
+      if (name === "earn_points") {
+        const existing = weekly.get(String(args.p_user_id)) || {
+          user_id: String(args.p_user_id),
+          display_name: "",
+          points: 0,
+        };
+        existing.points += Number(args.p_amount) || 0;
+        if (args.p_display_name) {
+          existing.display_name = String(args.p_display_name);
+        }
+        weekly.set(existing.user_id, existing);
+      }
+      return { error: null };
+    },
   };
 }
 

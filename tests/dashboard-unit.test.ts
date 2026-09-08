@@ -21,6 +21,10 @@ import {
   todayKey,
   tracks,
   validResourceUrl,
+  weekStartKey,
+  weeklySeries,
+  buildProfileCardSvg,
+  wrapLines,
 } from "../client/public/study-dashboard.js";
 
 // Minimal localStorage shim so saveState/loadState can run in Node.
@@ -428,6 +432,98 @@ describe("buildSemesterReport", () => {
     expect(html).toContain("Reviewed &lt;b&gt;lists&lt;/b&gt; &amp; notes");
     expect(html).toContain("30 Days of Python");
     expect(html).toContain("Deep-work ledger");
+  });
+});
+
+describe("weekStartKey", () => {
+  it("returns the Monday (UTC) of the week containing the date", () => {
+    // 2026-09-07 is a Monday in UTC.
+    expect(weekStartKey(new Date(Date.UTC(2026, 8, 7, 12, 0, 0)))).toBe(
+      "2026-09-07"
+    );
+    expect(weekStartKey(new Date(Date.UTC(2026, 8, 7, 0, 0, 0)))).toBe(
+      "2026-09-07"
+    );
+    // Saturday and Sunday of that week both map back to the same Monday.
+    expect(weekStartKey(new Date(Date.UTC(2026, 8, 12, 0, 0, 0)))).toBe(
+      "2026-09-07"
+    );
+    expect(weekStartKey(new Date(Date.UTC(2026, 8, 13, 23, 59, 0)))).toBe(
+      "2026-09-07"
+    );
+    // A Tuesday belongs to its own week.
+    expect(weekStartKey(new Date(Date.UTC(2026, 8, 15, 0, 0, 0)))).toBe(
+      "2026-09-14"
+    );
+  });
+});
+
+describe("weeklySeries", () => {
+  it("buckets activity into the last five weeks and derives the pace", () => {
+    const now = new Date();
+    const offset = (now.getDay() + 6) % 7; // days since Monday (local)
+    const thisMonday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() - offset
+    );
+    const lastMonday = new Date(
+      thisMonday.getFullYear(),
+      thisMonday.getMonth(),
+      thisMonday.getDate() - 7
+    );
+    const state = defaultState();
+    state.activity[dateKey(thisMonday)] = 2;
+    state.activity[dateKey(lastMonday)] = 3;
+
+    const series = weeklySeries(state);
+    expect(series.labels).toEqual(["W1", "W2", "W3", "W4", "W5"]);
+    expect(series.you[4]).toBe(2); // this week
+    expect(series.you[3]).toBe(3); // last week
+    expect(series.you[0]).toBe(0);
+    expect(series.pace).toBe(5); // 76 checkpoints / 16-week semester
+  });
+});
+
+describe("wrapLines", () => {
+  it("wraps text onto lines at the character limit", () => {
+    expect(wrapLines("Python leads the way and then some", 20)).toEqual([
+      "Python leads the way",
+      "and then some",
+    ]);
+    expect(wrapLines("short", 50)).toEqual(["short"]);
+  });
+});
+
+describe("buildProfileCardSvg", () => {
+  it("renders a self-contained SVG with the profile and stats", () => {
+    const state = defaultState();
+    state.completed = {
+      "python-1": true,
+      "python-2": true,
+      "python-3": true,
+      "python-4": true,
+      "python30-1": true,
+      "python30-2": true,
+    };
+    const svg = buildProfileCardSvg(state);
+    expect(svg.startsWith("<svg")).toBe(true);
+    expect(svg).toContain("SEM ASSIST");
+    expect(svg).toContain("Sujay");
+    expect(svg).toContain("Semester 3");
+    expect(svg).toContain("6/76");
+    expect(svg).toContain("60"); // 6 × 10 proof points
+    expect(svg).toContain("Python");
+    expect(svg).toContain("Study pulse");
+    expect(svg).toContain("W5");
+  });
+
+  it("escapes user-supplied semester text", () => {
+    const state = defaultState();
+    state.profileSemester = "<Semester 5>";
+    const svg = buildProfileCardSvg(state);
+    expect(svg).not.toContain("<Semester");
+    expect(svg).toContain("&lt;Semester 5&gt;");
   });
 });
 
