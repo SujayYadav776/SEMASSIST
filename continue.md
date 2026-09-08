@@ -17,7 +17,7 @@ Git is fully usable: the repository lives at `github.com/SujayYadav776/SEMASSIST
 ## Branding and UI
 
 - Product name: **SEM ASSIST**.
-- Dashboard greeting: **Welcome in, Sujay.**
+- Dashboard greeting: **Welcome in.** by default — the visitor's name (and semester) are editable profile fields persisted in state; no identity is hardcoded.
 - Brand logo is a minimal yellow rounded-square `S` monogram defined with `.brand-mark` CSS.
 - The visual style uses a pearl-gray background, warm yellow highlight, dark charcoal text, and rounded cards.
 
