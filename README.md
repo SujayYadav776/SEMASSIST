@@ -53,6 +53,9 @@ Six built-in tracks (76 checkpoints total):
 ## Repository layout
 
 ```text
+assets/
+  social-preview.png       # 1280×640 GitHub social preview card (upload manually:
+                           # Settings → General → Social preview)
 client/
   public/
     study-dashboard.html     # the whole dashboard UI (markup + styles)
