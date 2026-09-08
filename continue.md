@@ -97,7 +97,11 @@ Do not add a Supabase `service_role` key to the client or repository. The config
 
 The login UI supports email/password sign-up, email confirmation, sign-in, and sign-out. `applySession(user)` loads the current user’s `study_progress` record. The initial local state is uploaded on first sign-in if no cloud record exists.
 
-### Required manual Supabase setup
+### Git workflow
+- Commits auto-push to `origin` via a local `.git/hooks/post-commit` hook (keeps GitHub's contribution graph current).
+- To commit without pushing, set `GIT_AUTOPUSH_OFF=1` for the commit command.
+
+## Required manual Supabase setup
 
 The public key cannot create schema or modify Supabase settings. Before authentication and persistence work end-to-end, a project owner must:
 
