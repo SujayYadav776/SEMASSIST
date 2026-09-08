@@ -10,7 +10,8 @@
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
     "test": "vitest run",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "hooks:install": "sh scripts/install-autopush-hook.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

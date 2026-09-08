@@ -4,7 +4,7 @@
 
 This is a Vite/React project, but the user-facing product is currently a self-contained dashboard at `client/public/study-dashboard.html`. `client/src/pages/Home.tsx` immediately redirects the root React route to that static page. For feature work on the dashboard, edit the static HTML file rather than the React components.
 
-The workspace has no usable Git repository metadata (`git` reports that this directory is not a repository), so do not rely on diffs or history being available.
+Git is fully usable: the repository lives at `github.com/SujayYadav776/SEMASSIST` and `main` tracks `origin/main`.
 
 ## Main files
 
@@ -99,6 +99,7 @@ The login UI supports email/password sign-up, email confirmation, sign-in, and s
 
 ### Git workflow
 - Commits auto-push to `origin` via a local `.git/hooks/post-commit` hook (keeps GitHub's contribution graph current).
+- Fresh clones: run `pnpm hooks:install` (or `sh scripts/install-autopush-hook.sh`) once to install it; the canonical hook lives at `scripts/post-commit`.
 - To commit without pushing, set `GIT_AUTOPUSH_OFF=1` for the commit command.
 
 ## Required manual Supabase setup

@@ -1,0 +1,15 @@
+#!/bin/sh
+# Auto-push after every commit so origin stays in sync and GitHub's
+# contribution graph keeps recording. Bypass with: GIT_AUTOPUSH_OFF=1
+[ -n "$GIT_AUTOPUSH_OFF" ] && exit 0
+
+git remote get-url origin >/dev/null 2>&1 || exit 0
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null) || exit 0
+
+if git push -q origin "$branch" 2>/dev/null; then
+  echo "auto-push: pushed $branch to origin"
+else
+  echo "auto-push: push failed ($branch stays local) — check network/credentials" >&2
+fi
+exit 0
