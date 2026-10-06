@@ -23,7 +23,7 @@ describe("cloud save path (injected fake Supabase client)", () => {
 
     // init() signs the fake user in; with no cloud row it must upload local state.
     expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(true);
-    expect(text(byId(doc, "signedInEmail"))).toBe("test@example.com");
+    expect(byId(doc, "signOutTopbar")!.classList.contains("visible")).toBe(true);
 
     await sleep(600); // saveState debounce is 250ms
 
@@ -252,7 +252,7 @@ describe("applySession merge semantics (multi-device)", () => {
     const { app, doc, fake } = await bootWithoutInit(CLOUD_STATE, LOCAL_STATE);
 
     await (
-      app as unknown as { applySession(user: unknown): Promise<void> }
+      app as unknown as { applySession(_user: unknown): Promise<void> }
     ).applySession(USER);
 
     // Cloud state (java-1 only, no custom tasks/resources) replaced local state.
@@ -292,7 +292,7 @@ describe("applySession merge semantics (multi-device)", () => {
     const { app, doc, fake } = await bootWithoutInit(null, LOCAL_STATE);
 
     await (
-      app as unknown as { applySession(user: unknown): Promise<void> }
+      app as unknown as { applySession(_user: unknown): Promise<void> }
     ).applySession(USER);
     await sleep(600); // let the debounced initial upload flush
 
@@ -320,7 +320,7 @@ describe("applySession merge semantics (multi-device)", () => {
   it("signing out restores the local snapshot while the cloud row is untouched", async () => {
     const { app, doc, fake } = await bootWithoutInit(CLOUD_STATE, LOCAL_STATE);
     const apply = (
-      app as unknown as { applySession(user: unknown): Promise<void> }
+      app as unknown as { applySession(_user: unknown): Promise<void> }
     ).applySession;
 
     // Signed in: cloud state is on screen (no local resource).

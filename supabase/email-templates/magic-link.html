@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign in to SEM ASSIST</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+    :root {
+      --bg: #F3F0E7;
+      --glow: #FBEEBE;
+      --surface: #FFFDF6;
+      --fg: #232323;
+      --muted: #8C887C;
+      --border: #E8E2D2;
+      --primary: #F4C645;
+      --primary-ink: #1E1E1E;
+      --ink: #1E1E1E;
+      --ink-fg: #F4F2EC;
+      --info: #6E7681;
+      --radius-lg: 24px;
+      --radius-pill: 999px;
+      --shadow-md: 0 18px 40px rgba(35,35,35,0.10);
+      --font-display: 'Space Grotesk', system-ui, sans-serif;
+      --font-body: 'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      font-family: var(--font-body);
+      color: var(--fg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wrapper {
+      max-width: 480px;
+      margin: 40px auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+    }
+
+    .header {
+      background: var(--ink);
+      padding: 36px 32px;
+      text-align: center;
+    }
+
+    .brand-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 52px;
+      height: 52px;
+      background: var(--primary);
+      border-radius: 14px;
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--primary-ink);
+      margin-bottom: 16px;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--ink-fg);
+      letter-spacing: -0.01em;
+    }
+
+    .body {
+      padding: 44px 36px;
+      text-align: center;
+    }
+
+    .info-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: color-mix(in oklab, var(--info) 16%, var(--surface));
+      color: var(--info);
+      font-size: 28px;
+      margin-bottom: 24px;
+      border: 2px solid color-mix(in oklab, var(--info) 20%, transparent);
+    }
+
+    .body h2 {
+      margin: 0 0 12px;
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--fg);
+      letter-spacing: -0.01em;
+    }
+
+    .body p {
+      margin: 0 0 28px;
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--ink);
+      color: var(--ink-fg);
+      text-decoration: none;
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 15px;
+      padding: 14px 32px;
+      border-radius: var(--radius-pill);
+      margin-bottom: 28px;
+      transition: transform 0.14s cubic-bezier(.2,.8,.2,1);
+    }
+
+    .cta:hover {
+      transform: translateY(-1px);
+    }
+
+    .note {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .footer {
+      padding: 24px 32px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .footer a {
+      color: var(--fg);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <div class="brand-mark">S</div>
+      <h1>SEM ASSIST</h1>
+    </div>
+    <div class="body">
+      <div class="info-icon">🔑</div>
+      <h2>Sign in to your dashboard</h2>
+      <p>
+        Click below to continue to your study dashboard.<br>
+        This link expires in 1 hour.
+      </p>
+      <a href="{{ .ConfirmationURL }}" class="cta">Continue to dashboard</a>
+      <p class="note">
+        If you didn't request this, you can safely ignore this email.
+      </p>
+    </div>
+    <div class="footer">
+      SEM ASSIST · A calm workspace for semester progress<br>
+      <a href="https://semassist.runs-on.dev">semassist.runs-on.dev</a>
+    </div>
+  </div>
+</body>
+</html>

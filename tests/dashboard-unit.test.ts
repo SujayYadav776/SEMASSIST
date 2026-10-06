@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   STORAGE_KEY,
   addFocusMinutes,
+  authErrorMessage,
   dateKey,
   defaultState,
   escapeHtml,
@@ -22,6 +25,7 @@ import {
   tracks,
   validResourceUrl,
   weekStartKey,
+  weekRangeLabel,
   weeklySeries,
   buildProfileCardSvg,
   wrapLines,
@@ -435,25 +439,87 @@ describe("buildSemesterReport", () => {
   });
 });
 
+// The board's week must be the same Monday–Sunday week the weekly rhythm
+// chart and weeklySeries() bucket by, which are local dates.
 describe("weekStartKey", () => {
-  it("returns the Monday (UTC) of the week containing the date", () => {
-    // 2026-09-07 is a Monday in UTC.
-    expect(weekStartKey(new Date(Date.UTC(2026, 8, 7, 12, 0, 0)))).toBe(
-      "2026-09-07"
-    );
-    expect(weekStartKey(new Date(Date.UTC(2026, 8, 7, 0, 0, 0)))).toBe(
-      "2026-09-07"
-    );
-    // Saturday and Sunday of that week both map back to the same Monday.
-    expect(weekStartKey(new Date(Date.UTC(2026, 8, 12, 0, 0, 0)))).toBe(
-      "2026-09-07"
-    );
-    expect(weekStartKey(new Date(Date.UTC(2026, 8, 13, 23, 59, 0)))).toBe(
-      "2026-09-07"
-    );
-    // A Tuesday belongs to its own week.
-    expect(weekStartKey(new Date(Date.UTC(2026, 8, 15, 0, 0, 0)))).toBe(
-      "2026-09-14"
+  const localMondayKey = (date: Date) => {
+    const offset = (date.getUTCDay() + 6) % 7;
+    return new Date(
+      Date.UTC(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate() - offset
+      )
+    )
+      .toISOString()
+      .slice(0, 10);
+  };
+
+  it("returns the Monday of the local week containing the date", () => {
+    // 2026-09-14 is a Monday. These are local-time anchors, so the expectation
+    // holds whatever time zone the suite runs in.
+    expect(weekStartKey(new Date(2026, 8, 14, 12, 0, 0))).toBe("2026-09-14");
+    expect(weekStartKey(new Date(2026, 8, 15, 0, 0, 0))).toBe("2026-09-14");
+    expect(weekStartKey(new Date(2026, 8, 19, 23, 59, 0))).toBe("2026-09-14");
+    expect(weekStartKey(new Date(2026, 8, 20, 23, 59, 0))).toBe("2026-09-14");
+    expect(weekStartKey(new Date(2026, 8, 21, 0, 0, 0))).toBe("2026-09-21");
+  });
+
+  it("always lands on a local Monday no more than six days earlier", () => {
+    for (let day = 14; day <= 21; day++) {
+      for (const hour of [0, 6, 12, 18, 23]) {
+        const date = new Date(2026, 8, day, hour, 30, 0);
+        const [y, m, d] = weekStartKey(date).split("-").map(Number);
+        const monday = new Date(y, m - 1, d);
+        expect(monday.getDay()).toBe(1);
+        expect(monday.getTime()).toBeLessThanOrEqual(date.getTime());
+        expect(date.getTime() - monday.getTime()).toBeLessThan(7 * 864e5);
+      }
+    }
+  });
+
+  const offsetMinutes = new Date().getTimezoneOffset();
+  it.runIf(offsetMinutes !== 0)(
+    "keeps Monday-morning checkpoints in the new week, not the UTC one",
+    () => {
+      if (offsetMinutes < 0) {
+        // East of UTC: local Monday 00:30 is still Sunday in UTC, where the old
+        // implementation bucketed it into the week that had just ended.
+        const mondayMorning = new Date(2026, 8, 14, 0, 30, 0);
+        expect(weekStartKey(mondayMorning)).toBe("2026-09-14");
+        expect(localMondayKey(mondayMorning)).toBe("2026-09-07");
+      } else {
+        // West of UTC: local Sunday 23:30 is already Monday in UTC, which would
+        // have opened a week the local chart has not started yet.
+        const sundayNight = new Date(2026, 8, 20, 23, 30, 0);
+        expect(weekStartKey(sundayNight)).toBe("2026-09-14");
+        expect(localMondayKey(sundayNight)).toBe("2026-09-21");
+      }
+    }
+  );
+});
+
+// The board labels itself with the span its points cover, so "this week" is
+// stated rather than implied.
+describe("weekRangeLabel", () => {
+  it("renders a Monday–Sunday span with an abbreviated month", () => {
+    expect(weekRangeLabel("2026-09-14")).toBe("Sep 14–20");
+    expect(weekRangeLabel("2026-09-21")).toBe("Sep 21–27");
+  });
+
+  it("names both months when the week straddles a month boundary", () => {
+    expect(weekRangeLabel("2026-09-28")).toBe("Sep 28–Oct 4");
+    expect(weekRangeLabel("2026-12-28")).toBe("Dec 28–Jan 3");
+  });
+
+  it("is empty for an unparseable key so the board shows no stray text", () => {
+    expect(weekRangeLabel("")).toBe("");
+    expect(weekRangeLabel("not-a-date")).toBe("");
+  });
+
+  it("labels the week weekStartKey() returns", () => {
+    expect(weekRangeLabel(weekStartKey(new Date(2026, 8, 14, 12, 0, 0)))).toBe(
+      "Sep 14–20"
     );
   });
 });
@@ -553,5 +619,141 @@ describe("safeColor", () => {
     expect(safeColor("#1234567")).toBe("#f6ce50");
     expect(safeColor(null as never)).toBe("#f6ce50");
     expect(safeColor("")).toBe("#f6ce50");
+  });
+});
+
+// The schema file cannot be executed here, so its re-runnability contract and
+// the nickname NULL-vs-"" rule (mirrored by the fake Supabase client in
+// tests/helpers.ts) are pinned textually.
+// Supabase's auth errors are accurate but opaque; the app maps the causes it
+// can name to copy that tells the learner (or the owner) what to change.
+describe("authErrorMessage", () => {
+  it("names the fix when sign-up's confirmation email cannot be sent", () => {
+    const message = authErrorMessage(
+      { message: "Error sending confirmation email", status: 500 },
+      true
+    );
+    expect(message).toMatch(/SMTP/);
+    expect(message).toMatch(/email confirmation/);
+    // Keeps Supabase's own detail so the cause is still visible.
+    expect(message).toContain("Error sending confirmation email");
+  });
+
+  it("treats a signup 5xx as the mailer even without the usual wording", () => {
+    expect(
+      authErrorMessage({ message: "Database error saving new user", status: 500 }, true)
+    ).toMatch(/SMTP/);
+  });
+
+  it("names the mailer for a failed password reset too, not just sign-up", () => {
+    const message = authErrorMessage(
+      { message: "Error sending recovery email", status: 500 },
+      false
+    );
+    expect(message).toMatch(/SMTP/);
+    expect(message).toContain("Error sending recovery email");
+  });
+
+  it("explains an unconfirmed email instead of echoing Supabase", () => {
+    expect(
+      authErrorMessage(
+        { message: "Email not confirmed", code: "email_not_confirmed" },
+        false
+      )
+    ).toMatch(/confirmation link/);
+  });
+
+  it("points an existing account at sign-in", () => {
+    expect(
+      authErrorMessage(
+        { message: "User already registered", code: "user_already_exists" },
+        true
+      )
+    ).toMatch(/Sign in instead/);
+  });
+
+  it("keeps a rejected password actionable", () => {
+    expect(
+      authErrorMessage(
+        { message: "Invalid login credentials", code: "invalid_credentials" },
+        false
+      )
+    ).toMatch(/Check both/);
+  });
+
+  it("passes an unknown error through rather than inventing a cause", () => {
+    expect(authErrorMessage({ message: "Something odd happened" }, false)).toBe(
+      "Something odd happened"
+    );
+    expect(authErrorMessage(null, false)).toMatch(/Something went wrong/);
+  });
+});
+
+// supabase-js holds its auth lock while dispatching onAuthStateChange, and any
+// Supabase call made inside the callback deadlocks the client (Supabase's
+// "Why is my supabase API call not returning?"). applySession() reads the
+// session and the progress row, so the callback has to stay synchronous.
+describe("auth-event wiring", () => {
+  const source = readFileSync(
+    fileURLToPath(new URL("../client/public/study-dashboard.js", import.meta.url)),
+    "utf8"
+  );
+  const callbackBody = (() => {
+    const start = source.indexOf("onAuthStateChange(");
+    expect(start).toBeGreaterThan(-1);
+    return source.slice(start, source.indexOf("\n  });", start));
+  })();
+
+  it("defers the session apply out of the auth lock", () => {
+    expect(callbackBody).toContain("setTimeout(");
+    expect(callbackBody).not.toContain("async");
+    expect(callbackBody).not.toContain("await");
+  });
+
+  it("subscribes before applying the boot session", () => {
+    expect(source.indexOf("onAuthStateChange(")).toBeLessThan(
+      source.indexOf("await supabase.auth.getSession();")
+    );
+  });
+});
+
+describe("supabase schema", () => {
+  const schema = readFileSync(
+    fileURLToPath(new URL("../supabase/schema.sql", import.meta.url)),
+    "utf8"
+  );
+
+  it("can be re-run: every policy is dropped before it is created", () => {
+    const created = [...schema.matchAll(/create policy "([^"]+)"\s+on (\S+)/g)];
+    expect(created.length).toBeGreaterThan(0);
+    for (const [, policy, table] of created) {
+      expect(schema).toContain(
+        `drop policy if exists "${policy}" on ${table};`
+      );
+    }
+  });
+
+  it("keeps a nickname on NULL but replaces it on any explicit value", () => {
+    const fn = schema.slice(
+      schema.indexOf("create or replace function public.earn_points")
+    );
+    expect(fn).toContain("coalesce(left(p_display_name, 16), '')"); // insert path
+    expect(fn).toContain(
+      "when p_display_name is null then public.weekly_points.display_name"
+    );
+  });
+
+  it("keeps board weeks to the caller's local Monday, or the UTC week", () => {
+    const fn = schema.slice(
+      schema.indexOf("create or replace function public.earn_points")
+    );
+    expect(fn).toContain("p_week_start date default null");
+    expect(fn).toContain("target_week := utc_week;"); // NULL falls back to UTC
+    expect(fn).toContain("extract(isodow from target_week) <> 1"); // must be a Monday
+    expect(fn).toContain("abs(target_week - utc_week) > 7"); // ±1 week of the UTC week
+    // No ambiguous 3-argument overload left behind for PostgREST to trip over.
+    expect(schema).toContain(
+      "drop function if exists public.earn_points(uuid, integer, text);"
+    );
   });
 });

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   STORAGE_KEY,
-  USER_STORAGE_KEY,
   bootApp,
   byId,
   makeFakeSupabase,
@@ -1059,6 +1058,520 @@ const bootSignedIn = async (fake: ReturnType<typeof makeFakeSupabase>) =>
     supabaseClientFactory: () => fake,
   });
 
+// Sign-in and sign-up drive the same client seam. `session: null` boots the app
+// signed out, so the form is what delivers the session.
+const AUTH_SESSION = {
+  user: { id: "user-2", email: "learner@example.com" },
+  access_token: "TOKEN_2",
+};
+
+const submitAuth = (
+  doc: Document,
+  email: string,
+  password: string
+) => {
+  (byId(doc, "authEmail") as HTMLInputElement).value = email;
+  (byId(doc, "authPassword") as HTMLInputElement).value = password;
+  doc.querySelector<HTMLFormElement>("#authForm")!.requestSubmit();
+};
+
+describe("sign in and sign up", () => {
+  it("signs in with the entered credentials and applies the returned session", async () => {
+    const fake = makeFakeSupabase({
+      auth: { session: null, signInSession: AUTH_SESSION },
+      existingState: { completed: { "java-1": true } },
+    });
+    const { doc } = await bootSignedIn(fake);
+    expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(false);
+
+    submitAuth(doc, "learner@example.com", "hunter2");
+    await lbSleep(250);
+
+    expect(fake.authCalls.find(call => call.method === "signInWithPassword")?.args).toEqual({
+      email: "learner@example.com",
+      password: "hunter2",
+    });
+    // The session is applied from the response, without waiting on the event.
+    expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(true);
+    expect(byId(doc, "signOutTopbar")!.classList.contains("visible")).toBe(true);
+    expect(text(byId(doc, "workbenchCount"))).toBe("1 completed");
+    expect(text(byId(doc, "syncText"))).toBe("Synced to cloud");
+  });
+
+  it("applies a session delivered only through the auth event", async () => {
+    const fake = makeFakeSupabase({ auth: { session: null }, existingState: {} });
+    const { doc } = await bootSignedIn(fake);
+    expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(false);
+
+    fake.emitAuthChange("SIGNED_IN", AUTH_SESSION);
+    await lbSleep(80);
+
+    expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(true);
+    expect(text(byId(doc, "syncText"))).toBe("Synced to cloud");
+  });
+
+  it("shares one cloud read between concurrent applies of the same session", async () => {
+    const fake = makeFakeSupabase({ auth: { session: null } });
+    const { app, doc } = await bootSignedIn(fake);
+    const before = fake.progressReads;
+
+    await Promise.all([
+      (app as { applySession(user: unknown): Promise<void> }).applySession(
+        AUTH_SESSION.user
+      ),
+      (app as { applySession(user: unknown): Promise<void> }).applySession(
+        AUTH_SESSION.user
+      ),
+    ]);
+
+    expect(fake.progressReads - before).toBe(1);
+    expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("sends the sign-up redirect and asks for email confirmation", async () => {
+    const fake = makeFakeSupabase({ auth: { session: null, signUpSession: null } });
+    const { doc } = await bootSignedIn(fake);
+
+    (byId(doc, "authSwitch") as HTMLButtonElement).click();
+    expect(byId(doc, "authForm")!.dataset.mode).toBe("signup");
+    submitAuth(doc, "new@example.com", "hunter2");
+    await lbSleep(80);
+
+    expect(fake.authCalls.find(call => call.method === "signUp")?.args).toEqual({
+      email: "new@example.com",
+      password: "hunter2",
+      options: { emailRedirectTo: LB_CONFIG.redirectUrl },
+    });
+    // Confirmation is on: the next useful action is signing in, so the form is
+    // pointed there and the message says what to do.
+    expect(byId(doc, "authForm")!.dataset.mode).toBe("signin");
+    expect(text(byId(doc, "authSubmit"))).toBe("Sign in");
+    expect(text(byId(doc, "authMessage"))).toMatch(/Check your email/);
+  });
+
+  it("signs up straight in when confirmation is off (signUp returns a session)", async () => {
+    const fake = makeFakeSupabase({
+      auth: { session: null, signUpSession: AUTH_SESSION },
+      existingState: {},
+    });
+    const { doc } = await bootSignedIn(fake);
+
+    (byId(doc, "authSwitch") as HTMLButtonElement).click();
+    submitAuth(doc, "new@example.com", "hunter2");
+    await lbSleep(120);
+
+    expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(true);
+    expect(byId(doc, "signOutTopbar")!.classList.contains("visible")).toBe(true);
+    expect(text(byId(doc, "authMessage"))).toBe("Signed in successfully.");
+    // Password is cleared once a session is established.
+    expect((byId(doc, "authPassword") as HTMLInputElement).value).toBe("");
+  });
+
+  it("explains a failing confirmation email instead of echoing Supabase", async () => {
+    const fake = makeFakeSupabase({
+      auth: {
+        session: null,
+        signUpError: { message: "Error sending confirmation email", status: 500 },
+      },
+    });
+    const { doc } = await bootSignedIn(fake);
+
+    (byId(doc, "authSwitch") as HTMLButtonElement).click();
+    submitAuth(doc, "new@example.com", "hunter2");
+    await lbSleep(80);
+
+    expect(text(byId(doc, "authMessage"))).toMatch(/SMTP|email confirmation/);
+    // Nothing was created, so the form stays on sign-up for another attempt.
+    expect(byId(doc, "authForm")!.dataset.mode).toBe("signup");
+    expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(false);
+  });
+
+  it("offers a resend when sign-in says the email isn't confirmed", async () => {
+    const fake = makeFakeSupabase({
+      auth: {
+        session: null,
+        signInError: {
+          message: "Email not confirmed",
+          status: 400,
+          code: "email_not_confirmed",
+        },
+      },
+    });
+    const { doc } = await bootSignedIn(fake);
+    expect(byId(doc, "authResend")!.hasAttribute("hidden")).toBe(true);
+
+    submitAuth(doc, "learner@example.com", "hunter2");
+    await lbSleep(80);
+
+    expect(text(byId(doc, "authMessage"))).toMatch(/isn't confirmed/);
+    expect(byId(doc, "authResend")!.hasAttribute("hidden")).toBe(false);
+
+    (byId(doc, "authResend") as HTMLButtonElement).click();
+    await lbSleep(80);
+
+    expect(fake.authCalls.find(call => call.method === "resend")?.args).toEqual({
+      type: "signup",
+      email: "learner@example.com",
+      options: { emailRedirectTo: LB_CONFIG.redirectUrl },
+    });
+    expect(text(byId(doc, "authMessage"))).toMatch(
+      /Confirmation email sent to learner@example.com/
+    );
+  });
+
+  it("offers a resend after a sign-up that needs confirmation", async () => {
+    const fake = makeFakeSupabase({ auth: { session: null, signUpSession: null } });
+    const { doc } = await bootSignedIn(fake);
+
+    (byId(doc, "authSwitch") as HTMLButtonElement).click();
+    submitAuth(doc, "new@example.com", "hunter2");
+    await lbSleep(80);
+    expect(byId(doc, "authResend")!.hasAttribute("hidden")).toBe(false);
+
+    (byId(doc, "authResend") as HTMLButtonElement).click();
+    await lbSleep(80);
+
+    expect(fake.authCalls.find(call => call.method === "resend")?.args).toMatchObject({
+      email: "new@example.com",
+    });
+  });
+
+  it("asks for an email before resending, and says so", async () => {
+    const fake = makeFakeSupabase({ auth: { session: null, signUpSession: null } });
+    const { doc } = await bootSignedIn(fake);
+
+    (byId(doc, "authSwitch") as HTMLButtonElement).click();
+    submitAuth(doc, "new@example.com", "hunter2");
+    await lbSleep(80);
+
+    (byId(doc, "authEmail") as HTMLInputElement).value = "   ";
+    (byId(doc, "authResend") as HTMLButtonElement).click();
+    await lbSleep(80);
+
+    expect(text(byId(doc, "authMessage"))).toMatch(/Enter your email/);
+    expect(fake.authCalls.some(call => call.method === "resend")).toBe(false);
+  });
+
+  it("explains a failed resend in plain language", async () => {
+    const fake = makeFakeSupabase({
+      auth: {
+        session: null,
+        signInError: { message: "Email not confirmed", code: "email_not_confirmed" },
+        resendError: { message: "Error sending confirmation email", status: 500 },
+      },
+    });
+    const { doc } = await bootSignedIn(fake);
+
+    submitAuth(doc, "learner@example.com", "hunter2");
+    await lbSleep(80);
+    (byId(doc, "authResend") as HTMLButtonElement).click();
+    await lbSleep(80);
+
+    expect(text(byId(doc, "authMessage"))).toMatch(/SMTP|email confirmation/);
+  });
+
+  it("sends a reset link for the address typed into the form", async () => {
+    const fake = makeFakeSupabase({ auth: { session: null } });
+    const { doc } = await bootSignedIn(fake);
+
+    (byId(doc, "authEmail") as HTMLInputElement).value = "locked-out@example.com";
+    (byId(doc, "authForgot") as HTMLButtonElement).click();
+    await lbSleep(80);
+
+    expect(
+      fake.authCalls.find(call => call.method === "resetPasswordForEmail")?.args
+    ).toEqual({
+      email: "locked-out@example.com",
+      options: { redirectTo: LB_CONFIG.redirectUrl },
+    });
+    expect(text(byId(doc, "authMessage"))).toMatch(
+      /If locked-out@example.com has an account/
+    );
+  });
+
+  it("asks for an email before sending a reset link", async () => {
+    const fake = makeFakeSupabase({ auth: { session: null } });
+    const { doc } = await bootSignedIn(fake);
+
+    (byId(doc, "authForgot") as HTMLButtonElement).click();
+    await lbSleep(80);
+
+    expect(text(byId(doc, "authMessage"))).toMatch(/Enter your email/);
+    expect(fake.authCalls.some(call => call.method === "resetPasswordForEmail")).toBe(
+      false
+    );
+  });
+
+  it("opens the reset card on a recovery link instead of the dashboard", async () => {
+    const fake = makeFakeSupabase({ auth: { session: AUTH_SESSION }, existingState: {} });
+    const { doc } = await bootApp({
+      supabaseConfig: LB_CONFIG,
+      supabaseClientFactory: () => fake,
+      hash: "#access_token=TOKEN_2&type=recovery",
+    });
+    await lbSleep(120);
+
+    // The link's session must not hide the card behind the dashboard.
+    expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(false);
+    expect(byId(doc, "authForm")!.dataset.mode).toBe("reset");
+    expect(text(byId(doc, "authTitle"))).toBe("Set a new password");
+    expect((byId(doc, "authEmail") as HTMLInputElement).disabled).toBe(true);
+    expect((byId(doc, "authEmail") as HTMLInputElement).value).toBe(
+      AUTH_SESSION.user.email
+    );
+    expect(text(byId(doc, "authPasswordLabel"))).toBe("New password");
+    expect(text(byId(doc, "authSubmit"))).toBe("Save new password");
+    expect(byId(doc, "authSwitch")!.hasAttribute("hidden")).toBe(true);
+    expect(byId(doc, "signOutTopbar")!.classList.contains("visible")).toBe(false);
+  });
+
+  it("saves the new password, then shows the dashboard", async () => {
+    const fake = makeFakeSupabase({ auth: { session: AUTH_SESSION }, existingState: {} });
+    const { doc, win } = await bootApp({
+      supabaseConfig: LB_CONFIG,
+      supabaseClientFactory: () => fake,
+      hash: "#access_token=TOKEN_2&type=recovery",
+    });
+    await lbSleep(120);
+
+    submitAuth(doc, "ignored@example.com", "brand-new-secret");
+    await lbSleep(250);
+
+    expect(fake.authCalls.find(call => call.method === "updateUser")?.args).toEqual({
+      password: "brand-new-secret",
+    });
+    expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(true);
+    expect(byId(doc, "signOutTopbar")!.classList.contains("visible")).toBe(true);
+    expect(text(byId(doc, "syncText"))).toBe("Synced to cloud");
+    expect(text(byId(doc, "authMessage"))).toBe("Password updated. You're signed in.");
+    // The single-use fragment is dropped so a refresh stays signed in.
+    expect(win.location.hash).toBe("");
+  });
+
+  it("never sends a too-short new password", async () => {
+    const fake = makeFakeSupabase({ auth: { session: AUTH_SESSION }, existingState: {} });
+    const { doc } = await bootApp({
+      supabaseConfig: LB_CONFIG,
+      supabaseClientFactory: () => fake,
+      hash: "#type=recovery",
+    });
+    await lbSleep(120);
+
+    const passwordInput = byId(doc, "authPassword") as HTMLInputElement;
+    expect(passwordInput.getAttribute("minlength")).toBe("6");
+    passwordInput.value = "short";
+    doc.querySelector<HTMLFormElement>("#authForm")!.requestSubmit();
+    await lbSleep(80);
+
+    // Guarded twice: the input's minlength (the browser blocks the submit) and
+    // saveNewPassword()'s own check. Neither path may reach Supabase.
+    expect(fake.authCalls.some(call => call.method === "updateUser")).toBe(false);
+    expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(false);
+  });
+
+  it("explains an expired recovery link", async () => {
+    const fake = makeFakeSupabase({
+      auth: {
+        session: AUTH_SESSION,
+        updateUserError: { message: "Auth session missing!" },
+      },
+      existingState: {},
+    });
+    const { doc } = await bootApp({
+      supabaseConfig: LB_CONFIG,
+      supabaseClientFactory: () => fake,
+      hash: "#type=recovery",
+    });
+    await lbSleep(120);
+
+    submitAuth(doc, "ignored@example.com", "brand-new-secret");
+    await lbSleep(120);
+
+    expect(text(byId(doc, "authMessage"))).toMatch(/expired or was already used/);
+    expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(false);
+  });
+
+  it("raises the reset card when the PASSWORD_RECOVERY event arrives", async () => {
+    const fake = makeFakeSupabase({ auth: { session: null } });
+    const { doc } = await bootSignedIn(fake);
+    expect(byId(doc, "authForm")!.dataset.mode).toBe("signin");
+
+    fake.emitAuthChange("PASSWORD_RECOVERY", AUTH_SESSION);
+    await lbSleep(120);
+
+    expect(byId(doc, "authForm")!.dataset.mode).toBe("reset");
+    expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(false);
+    expect((byId(doc, "authEmail") as HTMLInputElement).value).toBe(
+      AUTH_SESSION.user.email
+    );
+  });
+
+  it("hides the resend action on a fresh form and when switching modes", async () => {
+    const fake = makeFakeSupabase({ auth: { session: null } });
+    const { doc } = await bootSignedIn(fake);
+
+    expect(byId(doc, "authResend")!.hasAttribute("hidden")).toBe(true);
+    (byId(doc, "authSwitch") as HTMLButtonElement).click();
+    expect(byId(doc, "authResend")!.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("surfaces a rejected sign-in and stays on the auth screen", async () => {
+    const fake = makeFakeSupabase({
+      auth: {
+        session: null,
+        signInError: {
+          message: "Invalid login credentials",
+          status: 400,
+          code: "invalid_credentials",
+        },
+      },
+    });
+    const { doc } = await bootSignedIn(fake);
+
+    submitAuth(doc, "learner@example.com", "nope");
+    await lbSleep(80);
+
+    expect(text(byId(doc, "authMessage"))).toMatch(/Check both/);
+    expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(false);
+  });
+});
+
+// "Change password" rotates the password against the session that is already
+// open, so it never touches the email channel the reset flow depends on.
+describe("change password", () => {
+  const fillPasswords = (doc: Document, next: string, confirm: string) => {
+    (byId(doc, "newPassword") as HTMLInputElement).value = next;
+    (byId(doc, "confirmPassword") as HTMLInputElement).value = confirm;
+  };
+  const pressKey = (doc: Document, el: HTMLElement, key: string) =>
+    el.dispatchEvent(
+      new doc.defaultView!.KeyboardEvent("keydown", { key, bubbles: true })
+    );
+
+  it("offers the action only for a signed-in session", async () => {
+    const signedOut = await bootSignedIn(
+      makeFakeSupabase({ auth: { session: null } })
+    );
+    expect(byId(signedOut.doc, "profileSecurity")!.hasAttribute("hidden")).toBe(
+      true
+    );
+
+    const signedIn = await bootSignedIn(makeFakeSupabase({}));
+    await lbSleep(60);
+    expect(byId(signedIn.doc, "profileSecurity")!.hasAttribute("hidden")).toBe(
+      false
+    );
+  });
+
+  it("rotates the password from the profile card without an email round trip", async () => {
+    const fake = makeFakeSupabase({ auth: { session: AUTH_SESSION } });
+    const { doc } = await bootSignedIn(fake);
+    await lbSleep(60);
+    // Closed until the profile card's action is used.
+    expect(byId(doc, "passwordOverlay")!.hasAttribute("hidden")).toBe(true);
+
+    (byId(doc, "changePasswordOpen") as HTMLButtonElement).click();
+    expect(byId(doc, "passwordOverlay")!.hasAttribute("hidden")).toBe(false);
+    expect(text(byId(doc, "passwordAccount"))).toBe(AUTH_SESSION.user.email);
+
+    fillPasswords(doc, "brand-new-secret", "brand-new-secret");
+    (byId(doc, "passwordSave") as HTMLButtonElement).click();
+    await lbSleep(150);
+
+    expect(fake.authCalls.find(call => call.method === "updateUser")?.args).toEqual(
+      { password: "brand-new-secret" }
+    );
+    // No email is involved at all: the reset-link request is never made.
+    expect(fake.authCalls.some(call => call.method === "resetPasswordForEmail")).toBe(
+      false
+    );
+    expect(byId(doc, "passwordOverlay")!.hasAttribute("hidden")).toBe(true);
+    expect((byId(doc, "newPassword") as HTMLInputElement).value).toBe("");
+    expect(text(byId(doc, "toast"))).toMatch(/Password updated/);
+    // The session survives the change: still on the dashboard.
+    expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("never sends a too-short new password", async () => {
+    const fake = makeFakeSupabase({});
+    const { doc } = await bootSignedIn(fake);
+    await lbSleep(60);
+
+    (byId(doc, "changePasswordOpen") as HTMLButtonElement).click();
+    expect(byId(doc, "newPassword")!.getAttribute("minlength")).toBe("6");
+    fillPasswords(doc, "short", "short");
+    (byId(doc, "passwordSave") as HTMLButtonElement).click();
+    await lbSleep(80);
+
+    expect(fake.authCalls.some(call => call.method === "updateUser")).toBe(false);
+    expect(text(byId(doc, "passwordError"))).toMatch(/at least 6/);
+    expect(byId(doc, "passwordOverlay")!.hasAttribute("hidden")).toBe(false);
+  });
+
+  it("requires the confirmation to match", async () => {
+    const fake = makeFakeSupabase({});
+    const { doc } = await bootSignedIn(fake);
+    await lbSleep(60);
+
+    (byId(doc, "changePasswordOpen") as HTMLButtonElement).click();
+    fillPasswords(doc, "brand-new-secret", "brand-new-secret2");
+    (byId(doc, "passwordSave") as HTMLButtonElement).click();
+    await lbSleep(80);
+
+    expect(fake.authCalls.some(call => call.method === "updateUser")).toBe(false);
+    expect(text(byId(doc, "passwordError"))).toMatch(/must match/);
+  });
+
+  it("advises signing in again when the session has expired", async () => {
+    const fake = makeFakeSupabase({
+      auth: { updateUserError: { message: "Auth session missing!" } },
+    });
+    const { doc } = await bootSignedIn(fake);
+    await lbSleep(60);
+
+    (byId(doc, "changePasswordOpen") as HTMLButtonElement).click();
+    fillPasswords(doc, "brand-new-secret", "brand-new-secret");
+    (byId(doc, "passwordSave") as HTMLButtonElement).click();
+    await lbSleep(150);
+
+    expect(text(byId(doc, "passwordError"))).toMatch(/session has expired/i);
+    // Not the recovery-link wording, which would send a signed-in user hunting
+    // for an email that this flow deliberately avoids.
+    expect(text(byId(doc, "passwordError"))).not.toMatch(/Forgot password/);
+    expect(byId(doc, "passwordOverlay")!.hasAttribute("hidden")).toBe(false);
+  });
+
+  it("closes on Escape and clears anything typed", async () => {
+    const fake = makeFakeSupabase({});
+    const { doc } = await bootSignedIn(fake);
+    await lbSleep(60);
+
+    (byId(doc, "changePasswordOpen") as HTMLButtonElement).click();
+    fillPasswords(doc, "brand-new-secret", "brand-new-secret");
+    pressKey(doc, byId(doc, "passwordOverlay")!, "Escape");
+
+    expect(byId(doc, "passwordOverlay")!.hasAttribute("hidden")).toBe(true);
+    expect((byId(doc, "newPassword") as HTMLInputElement).value).toBe("");
+    expect((byId(doc, "confirmPassword") as HTMLInputElement).value).toBe("");
+  });
+
+  it("closes the dialog and hides the action when the session ends", async () => {
+    const fake = makeFakeSupabase({});
+    const { doc } = await bootSignedIn(fake);
+    await lbSleep(60);
+
+    (byId(doc, "changePasswordOpen") as HTMLButtonElement).click();
+    fillPasswords(doc, "brand-new-secret", "brand-new-secret");
+
+    fake.emitAuthChange("SIGNED_OUT", null);
+    await lbSleep(150);
+
+    expect(byId(doc, "passwordOverlay")!.hasAttribute("hidden")).toBe(true);
+    expect((byId(doc, "newPassword") as HTMLInputElement).value).toBe("");
+    expect(byId(doc, "profileSecurity")!.hasAttribute("hidden")).toBe(true);
+  });
+});
+
 describe("weekly leaderboard", () => {
   it("renders the board on sign-in and marks your own row", async () => {
     const fake = makeFakeSupabase({
@@ -1079,6 +1592,24 @@ describe("weekly leaderboard", () => {
     expect(list).toContain("Learner");
     expect(doc.querySelector(".lb-row.you span")?.textContent).toBe("Sujay");
     expect(text(byId(doc, "leaderboardMine"))).toBe("You · 120 pts · #1");
+  });
+
+  it("labels the board with the week span it covers", async () => {
+    const fake = makeFakeSupabase();
+    const { app, doc } = await bootSignedIn(fake);
+    await lbSleep(60);
+    const label = text(byId(doc, "leaderboardWeek"))!;
+    const expected = (
+      app as {
+        weekRangeLabel(key: string): string;
+        weekStartKey(): string;
+      }
+    ).weekRangeLabel(
+      (app as { weekStartKey(): string }).weekStartKey()
+    );
+    expect(label).toBe(expected);
+    // e.g. "Sep 14–20" — the span is stated, not implied by "this week".
+    expect(label).toMatch(/^[A-Z][a-z]{2} \d{1,2}–(?:[A-Z][a-z]{2} )?\d{1,2}$/);
   });
 
   it("awards +10 when verifying a checkpoint and the board reflects it", async () => {
@@ -1170,6 +1701,118 @@ describe("weekly leaderboard", () => {
         args: expect.objectContaining({ p_display_name: "Ace", p_amount: 0 }),
       })
     );
+  });
+
+  it("clearing the nickname clears it on the board", async () => {
+    const fake = makeFakeSupabase({
+      leaderboardRows: [
+        { user_id: "user-1", display_name: "Ace", points: 40 },
+      ],
+    });
+    const { doc } = await bootSignedIn(fake);
+    await lbSleep(60);
+    expect(text(byId(doc, "leaderboardList"))).toContain("Ace");
+
+    // An emptied nickname is written through as "" rather than dropped, so the
+    // row falls back to the anonymous label instead of keeping the old name.
+    const input = byId(doc, "leaderboardName") as HTMLInputElement;
+    input.value = "   ";
+    byId(doc, "leaderboardNameSave")!.click();
+    await lbSleep(800);
+
+    expect(fake.rpcCalls).toContainEqual(
+      expect.objectContaining({
+        name: "earn_points",
+        args: expect.objectContaining({ p_display_name: "", p_amount: 0 }),
+      })
+    );
+    expect(
+      (stored(doc, "user-1") as Record<string, unknown>).leaderboardName
+    ).toBe("");
+    const list = text(byId(doc, "leaderboardList"))!;
+    expect(list).toContain("Learner");
+    expect(list).not.toContain("Ace");
+  });
+
+  it("carries a nickname saved after earning points on the next award", async () => {
+    const fake = makeFakeSupabase();
+    const { doc } = await bootSignedIn(fake);
+    await lbSleep(60);
+    doc
+      .querySelector<HTMLInputElement>(
+        '.task-row[data-task-id="python-1"] .check'
+      )!
+      .click();
+    await lbSleep(800);
+    expect(text(byId(doc, "leaderboardMine"))).toBe("You · 10 pts · #1");
+
+    const input = byId(doc, "leaderboardName") as HTMLInputElement;
+    input.value = "Ace";
+    byId(doc, "leaderboardNameSave")!.click();
+    await lbSleep(800);
+    expect(doc.querySelector(".lb-row.you span")?.textContent).toBe("Ace");
+
+    // Later awards keep sending the stored nickname rather than blanking it.
+    doc
+      .querySelector<HTMLInputElement>(
+        '.task-row[data-task-id="python-2"] .check'
+      )!
+      .click();
+    await lbSleep(800);
+    expect(fake.rpcCalls).toContainEqual(
+      expect.objectContaining({
+        args: expect.objectContaining({ p_amount: 10, p_display_name: "Ace" }),
+      })
+    );
+    expect(text(byId(doc, "leaderboardMine"))).toBe("You · 20 pts · #1");
+  });
+
+  it("keeps the board on the local Monday and never mixes in last week", async () => {
+    const localMonday = (weeksAgo: number) => {
+      const now = new Date();
+      const offset = (now.getDay() + 6) % 7; // days since Monday (local)
+      const monday = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() - offset - weeksAgo * 7
+      );
+      const pad = (value: number) => String(value).padStart(2, "0");
+      return `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`;
+    };
+    const thisWeek = localMonday(0);
+    const fake = makeFakeSupabase({
+      leaderboardRows: [
+        // A big score from the week that just ended must not leak onto the board.
+        {
+          user_id: "user-2",
+          display_name: "Lastweek Lynn",
+          points: 500,
+          week_start: localMonday(1),
+        },
+      ],
+    });
+    const { doc } = await bootSignedIn(fake);
+    await lbSleep(60);
+    expect(text(byId(doc, "leaderboardList"))).not.toContain("Lastweek Lynn");
+
+    doc
+      .querySelector<HTMLInputElement>(
+        '.task-row[data-task-id="python-1"] .check'
+      )!
+      .click();
+    await lbSleep(800);
+
+    // Both the read and the write use the caller's local Monday, so a Monday
+    // morning checkpoint counts in the week the weekly rhythm chart shows.
+    expect([...new Set(fake.weekQueries)]).toEqual([thisWeek]);
+    expect(fake.rpcCalls).toContainEqual(
+      expect.objectContaining({
+        args: expect.objectContaining({ p_amount: 10, p_week_start: thisWeek }),
+      })
+    );
+    const [y, m, d] = thisWeek.split("-").map(Number);
+    expect(new Date(y, m - 1, d).getDay()).toBe(1);
+    expect(text(byId(doc, "leaderboardMine"))).toBe("You · 10 pts · #1");
   });
 });
 
@@ -1296,7 +1939,7 @@ describe("profile card", () => {
       "Your top skills appear as you verify checkpoints",
     ]);
     expect(text(byId(doc, "introNote"))).not.toContain("lead");    // The share card is neutral too.
-    const svg = (app as { buildProfileCardSvg(state: object): string }).buildProfileCardSvg(
+    const svg = (app as { buildProfileCardSvg(_state: object): string }).buildProfileCardSvg(
       (app as { loadState(): object }).loadState()
     );
     expect(svg).toContain("[yourname]");

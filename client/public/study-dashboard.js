@@ -383,6 +383,7 @@ let currentUser = null;
 let saveTimer = null;
 let currentAccessToken = null;
 let stateDirty = false;
+let cloudSaveFailed = false;
 const taskId = (track, index) => `${track.id}-${index + 1}`;
 const dateKey = date => {
   const local = new Date(date);
@@ -497,6 +498,7 @@ function saveState(state) {
       JSON.stringify(state)
     );
   } catch {}
+  updateSyncPill();
   if (!currentUser) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(flushCloudSave, 250);
@@ -504,17 +506,24 @@ function saveState(state) {
 async function flushCloudSave() {
   if (!currentUser || !currentState) return;
   const sb = await ensureSupabase();
-  if (!sb) return;
+  if (!sb) {
+    cloudSaveFailed = true;
+    updateSyncPill();
+    return;
+  }
   const { error } = await sb.from("study_progress").upsert({
     user_id: currentUser.id,
     state: currentState,
     updated_at: new Date().toISOString(),
   });
   if (error) {
+    cloudSaveFailed = true;
     showToast("Could not save progress. Please try again.");
   } else {
+    cloudSaveFailed = false;
     stateDirty = false;
   }
+  updateSyncPill();
 }
 function keepaliveFlush() {
   if (!stateDirty || !currentUser || !currentState) return;
@@ -546,6 +555,28 @@ function showToast(message) {
   toast.classList.add("show");
   clearTimeout(window.toastTimer);
   window.toastTimer = setTimeout(() => toast.classList.remove("show"), 1800);
+}
+// Sync-status pill in the custom-task card. It reflects where the current
+// state actually lives, so the UI copy ("saved in this browser") is never
+// misleading: signed-in users see "Synced to cloud", offline users see
+// "Saved locally", and a failed save shows "Saved locally".
+function updateSyncPill() {
+  if (typeof document === "undefined") return;
+  const pill = document.getElementById("syncPill");
+  const text = document.getElementById("syncText");
+  if (!pill || !text) return;
+  pill.classList.remove("cloud", "offline");
+  if (currentUser) {
+    if (cloudSaveFailed) {
+      pill.classList.add("offline");
+      text.textContent = "Cloud failed";
+    } else {
+      pill.classList.add("cloud");
+      text.textContent = stateDirty ? "Syncing…" : "Synced to cloud";
+    }
+  } else {
+    text.textContent = "Saved locally";
+  }
 }
 // Cookie consent banner. The dashboard stores study progress and the sign-in
 // session in localStorage only and sets no tracking cookies, so both buttons
@@ -938,34 +969,90 @@ function renderMissionQueue(state) {
     )
     .join("");
 }
-// Monday-UTC of the week containing the given date — must match the
-// date_trunc('week', now()) the earn_points RPC uses for weekly_points rows.
+// Monday of the week containing the given date, in the viewer's LOCAL time —
+// the same boundary the weekly rhythm chart and weeklySeries() use, so a
+// checkpoint ticked on Monday morning lands on the week those two show rather
+// than on the previous UTC week. earn_points stores board rows under this key,
+// so awards send it along instead of the server deriving a week of its own.
 function weekStartKey(date = new Date()) {
-  const day = (date.getUTCDay() + 6) % 7;
-  const monday = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() - day)
+  const local = new Date(date);
+  const day = (local.getDay() + 6) % 7; // days since Monday (local)
+  return dateKey(
+    new Date(local.getFullYear(), local.getMonth(), local.getDate() - day)
   );
-  return monday.toISOString().slice(0, 10);
+}
+const MONTH_ABBR = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+// Human label for the Monday→Sunday span a week_start key covers, e.g.
+// "Sep 14–20" or "Sep 29–Oct 5". Shown on the board so the week its points
+// belong to is stated rather than implied by an unlabelled "this week".
+function weekRangeLabel(startKey) {
+  const start = new Date(`${startKey}T00:00:00`);
+  if (Number.isNaN(start.getTime())) return "";
+  const end = new Date(
+    start.getFullYear(),
+    start.getMonth(),
+    start.getDate() + 6
+  );
+  const left = `${MONTH_ABBR[start.getMonth()]} ${start.getDate()}`;
+  const right =
+    start.getMonth() === end.getMonth()
+      ? String(end.getDate())
+      : `${MONTH_ABBR[end.getMonth()]} ${end.getDate()}`;
+  return `${left}–${right}`;
 }
 let leaderboardTimer = null;
 function scheduleLeaderboardRefresh() {
   clearTimeout(leaderboardTimer);
-  leaderboardTimer = setTimeout(refreshLeaderboard, 400);
+  // Pin the document this debounce was scheduled for. A refresh must never
+  // mutate a document other than the one it was queued against — the case that
+  // matters is a pending timer outliving its page (hot reload, or a test
+  // window torn down while its debounce is still queued), where firing would
+  // write one page's board into another's DOM.
+  const doc = typeof document === "undefined" ? null : document;
+  leaderboardTimer = setTimeout(() => {
+    if (doc && doc !== document) return;
+    refreshLeaderboard();
+  }, 400);
 }
 // Fire-and-forget leaderboard point award. Never surfaces an error toast — it
 // is a best-effort social layer, independent of the (toasting) progress save.
-async function awardPoints(amount) {
+// `displayName` overrides the stored nickname: pass a string (including "") to
+// write it through verbatim, or omit it to send the stored nickname only when
+// one is set, so awarding points never wipes a name saved on another device.
+async function awardPoints(amount, displayName) {
   if (!currentUser) return;
   const sb = await ensureSupabase();
   if (!sb) return;
-  const name = String(loadState().leaderboardName || "")
+  const stored = String(loadState().leaderboardName || "")
     .trim()
     .slice(0, 16);
+  const name =
+    displayName === undefined
+      ? stored || null
+      : String(displayName).trim().slice(0, 16);
   try {
     await sb.rpc("earn_points", {
       p_user_id: currentUser.id,
       p_amount: amount,
-      p_display_name: name || null,
+      // Already null when the stored nickname is unset; "" must survive as-is
+      // so an emptied nickname actually clears the board row.
+      p_display_name: name,
+      // The caller's local Monday. The RPC only accepts the UTC week or the
+      // one either side of it, so a tampered key cannot land on any other week.
+      p_week_start: weekStartKey(),
     });
   } catch {
     return;
@@ -981,7 +1068,9 @@ function saveLeaderboardName() {
     .slice(0, 16);
   saveState(state);
   input.value = state.leaderboardName;
-  awardPoints(0); // sync the display name to the board row immediately
+  // Syncs the board row immediately; an emptied nickname is sent as "" so it
+  // actually clears there instead of leaving the previous name on the board.
+  awardPoints(0, state.leaderboardName);
   showToast("Leaderboard nickname saved.");
 }
 async function refreshLeaderboard() {
@@ -1003,6 +1092,8 @@ async function refreshLeaderboard() {
   if (nameInput && !nameInput.matches(":focus")) {
     nameInput.value = loadState().leaderboardName || "";
   }
+  const weekLabel = document.getElementById("leaderboardWeek");
+  if (weekLabel) weekLabel.textContent = weekRangeLabel(weekStartKey());
   const [{ data: topData, error: topError }, { data: mineData }] =
     await Promise.all([
       sb
@@ -1334,6 +1425,56 @@ async function copySharePng() {
   }
   downloadSharePng();
 }
+// Welcome greeting typing effect (vanilla port of the reactbits "TextType"
+// component the user asked for): types the greeting name one character at a
+// time (typingSpeed 75ms), holds a blinking "|" cursor for pauseDuration
+// 1500ms, then settles on the static text. The full text is always rendered
+// synchronously first, so tests, reduced-motion users, and screen readers
+// never depend on the animation.
+const WELCOME_TYPE_SPEED_MS = 75;
+const WELCOME_TYPE_HOLD_MS = 1500;
+const WELCOME_TYPE_START_DELAY_MS = 350;
+let welcomeTypeLastText = null;
+let welcomeTypeToken = 0;
+function prefersReducedMotion() {
+  try {
+    return Boolean(
+      window.matchMedia &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+  } catch {
+    return true;
+  }
+}
+function animateWelcomeText(element, text) {
+  if (!element || welcomeTypeLastText === text) return;
+  welcomeTypeLastText = text;
+  if (prefersReducedMotion()) return;
+  const token = ++welcomeTypeToken;
+  window.setTimeout(() => {
+    if (token !== welcomeTypeToken) return;
+    element.textContent = "";
+    const cursor = document.createElement("span");
+    cursor.className = "welcome-cursor";
+    cursor.setAttribute("aria-hidden", "true");
+    cursor.textContent = "|";
+    element.appendChild(cursor);
+    let index = 0;
+    const typeNext = () => {
+      if (token !== welcomeTypeToken) return;
+      if (index < text.length) {
+        cursor.before(document.createTextNode(text[index]));
+        index += 1;
+        window.setTimeout(typeNext, WELCOME_TYPE_SPEED_MS);
+      } else {
+        window.setTimeout(() => {
+          if (token === welcomeTypeToken) cursor.remove();
+        }, WELCOME_TYPE_HOLD_MS);
+      }
+    };
+    typeNext();
+  }, WELCOME_TYPE_START_DELAY_MS);
+}
 function renderProfile(state) {
   const stats = getStats(state);
   const hasName = profileHasName(state);
@@ -1350,9 +1491,12 @@ function renderProfile(state) {
   }
   const headline = document.getElementById("welcomeHeadline");
   if (headline) {
-    headline.innerHTML = String(state.profileName || "").trim()
-      ? `Welcome in, <em>${escapeHtml(name)}.</em>`
-      : `Welcome in, <em class="welcome-name placeholder" data-edit-name title="Click to add your name">[yourname].</em>`;
+    const placeholderGreeting = !String(state.profileName || "").trim();
+    const greetingText = placeholderGreeting ? "[yourname]." : `${name}.`;
+    headline.innerHTML = placeholderGreeting
+      ? `Welcome in, <em class="welcome-name placeholder" data-edit-name title="Click to add your name">[yourname].</em>`
+      : `Welcome in, <em>${escapeHtml(name)}.</em>`;
+    animateWelcomeText(headline.querySelector("em"), greetingText);
   }
   const badges = document.getElementById("profileBadges");
   if (badges) {
@@ -1733,15 +1877,6 @@ function renderActivity(state) {
   const start = new Date(today);
   start.setDate(start.getDate() - 363 - start.getDay());
   grid.innerHTML = "";
-  let active = 0,
-    total = 0;
-  Object.values(state.activity).forEach(value => {
-    const n = Number(value) || 0;
-    if (n) {
-      active++;
-      total += n;
-    }
-  });
   const sessionsByDay = {};
   (Array.isArray(state.focus.sessions) ? state.focus.sessions : []).forEach(
     session => {
@@ -2122,27 +2257,62 @@ function setTimer() {
       `${Math.min(100, (focusSeconds / 1500) * 100)}%`
     );
 }
+// Both delivery channels can ask for the same session — the auth event and the
+// form submit — and two re-entrant applies would race two cloud reads and two
+// renders against each other. One in-flight apply per user id is shared.
+let sessionApplyPromise = null;
+let sessionApplyUserId = null;
 async function applySession(user) {
+  const key = user?.id || "";
+  if (sessionApplyPromise && sessionApplyUserId === key) return sessionApplyPromise;
+  sessionApplyUserId = key;
+  sessionApplyPromise = applySessionNow(user);
+  try {
+    return await sessionApplyPromise;
+  } finally {
+    sessionApplyPromise = null;
+  }
+}
+// A recovery link signs the user in, but the reason they are here is to set a
+// password. While that is pending the auth screen stays up instead of the
+// dashboard, so the reset card cannot be swapped out from under them.
+let passwordResetPending = false;
+function showSignedInChrome(user) {
+  const signedIn = Boolean(user) && !passwordResetPending;
+  document.getElementById("authScreen").hidden = signedIn;
+  const signOutBtn = document.getElementById("signOutTopbar");
+  if (signOutBtn) signOutBtn.classList.toggle("visible", signedIn);
+  // Changing a password needs a session, so the control lives and dies with the
+  // signed-in chrome rather than being a dead button for guests.
+  const security = document.getElementById("profileSecurity");
+  if (security) security.hidden = !signedIn;
+  // Signing out (or losing the session) strands an open dialog over the auth
+  // screen: close it and drop whatever password was typed.
+  if (!signedIn) closePasswordDialog();
+}
+async function applySessionNow(user) {
   currentUser = user || null;
-  document.getElementById("authScreen").hidden = Boolean(user);
-  document.getElementById("signedIn").hidden = !user;
+  showSignedInChrome(user);
   if (!user) {
     currentAccessToken = null;
+    currentUser = null;
+    cloudSaveFailed = false;
     currentState = loadLocalState(null);
     renderTracks(currentState);
     updateSummary(currentState);
     refreshLeaderboard();
+    updateSyncPill();
     return;
   }
-  document.getElementById("signedInEmail").textContent =
-    user.email || "Signed in";
   const sb = await ensureSupabase();
   if (!sb) {
     currentAccessToken = null;
+    cloudSaveFailed = true;
     currentState = loadLocalState(user.id);
     renderTracks(currentState);
     updateSummary(currentState);
     refreshLeaderboard();
+    updateSyncPill();
     return;
   }
   const {
@@ -2161,12 +2331,19 @@ async function applySession(user) {
   renderTracks(currentState);
   updateSummary(currentState);
   refreshLeaderboard();
+  updateSyncPill();
   if (!data?.state) saveState(currentState);
 }
 function setAuthMode(signup) {
+  passwordResetPending = false;
   document.getElementById("authForm").dataset.mode = signup
     ? "signup"
     : "signin";
+  // Undo whatever reset mode changed on shared fields.
+  document.getElementById("authEmail").disabled = false;
+  document.getElementById("authPasswordLabel").textContent = "Password";
+  document.getElementById("authSwitch").hidden = false;
+  document.getElementById("authForgot").hidden = false;
   document.getElementById("authTitle").textContent = signup
     ? "Create your account"
     : "Welcome back";
@@ -2183,20 +2360,286 @@ function setAuthMode(signup) {
     ? "new-password"
     : "current-password";
   document.getElementById("authMessage").textContent = "";
+  setResendVisible(false);
+}
+// Third auth mode, reached by opening the recovery link from "Forgot password?"
+// (or by the PASSWORD_RECOVERY event). The link already carries a session, so
+// the card asks for the new password only and keeps the dashboard away until it
+// is saved. Safe to call twice: the second call just fills in the email once the
+// session that carries it is known.
+function beginPasswordReset(email) {
+  passwordResetPending = true;
+  document.getElementById("authForm").dataset.mode = "reset";
+  document.getElementById("authTitle").textContent = "Set a new password";
+  document.getElementById("authDescription").textContent =
+    "Choose a new password for this account. Saving it signs you in.";
+  document.getElementById("authSubmit").textContent = "Save new password";
+  document.getElementById("authPasswordLabel").textContent = "New password";
+  const emailInput = document.getElementById("authEmail");
+  if (email) emailInput.value = email;
+  // The address is fixed by the link, and a disabled field is skipped by form
+  // validation, so the hidden-from-editing email cannot block submission.
+  emailInput.disabled = true;
+  const passwordInput = document.getElementById("authPassword");
+  passwordInput.value = "";
+  passwordInput.autocomplete = "new-password";
+  document.getElementById("authSwitch").hidden = true;
+  document.getElementById("authForgot").hidden = true;
+  setResendVisible(false);
+  document.getElementById("authMessage").textContent = "";
+  showSignedInChrome(currentUser);
+  passwordInput.focus();
+}
+// Supabase's own auth errors are accurate but opaque ("Error sending
+// confirmation email" tells a learner nothing they can act on). Map the ones
+// with a known cause to copy that names the fix, and keep the raw message for
+// everything else rather than inventing a cause.
+function authErrorMessage(error, signup) {
+  const raw = String(error?.message || "").trim();
+  const code = String(error?.code || error?.error_code || "").toLowerCase();
+  const status = Number(error?.status) || 0;
+  if (status === 429 || /rate limit|too many requests/i.test(raw)) {
+    return "Too many attempts just now. Wait a minute, then try again.";
+  }
+  if (/auth session missing|session.*(missing|not found)/i.test(raw)) {
+    return "That reset link has expired or was already used. Request a new one with Forgot password.";
+  }
+  if (code === "email_not_confirmed" || /email not confirmed/i.test(raw)) {
+    return "That email isn't confirmed yet. Open the confirmation link we sent you, then sign in.";
+  }
+  if (
+    code === "email_exists" ||
+    code === "user_already_exists" ||
+    /already registered|already exists/i.test(raw)
+  ) {
+    return "That email already has an account. Sign in instead, or reset its password.";
+  }
+  if (code === "invalid_credentials" || /invalid login credentials/i.test(raw)) {
+    return "Email or password not recognised. Check both and try again.";
+  }
+  if (/sending.*email|confirmation email/i.test(raw) || (signup && status >= 500)) {
+    // The mailer, not the request: nothing the learner types will change it, and
+    // it hits sign-up, resends and password resets alike.
+    return (
+      "This project's email service could not send that email, so this step cannot finish." +
+      " An owner must configure SMTP or turn off email confirmation in Supabase →" +
+      ` Authentication → Email. (Supabase: ${raw || "no detail"})`
+    );
+  }
+  return raw || "Something went wrong. Try again.";
+}
+// True when the obstacle is an unconfirmed email rather than bad credentials —
+// the one auth failure the learner can retry themselves.
+function authNeedsConfirmation(error) {
+  const code = String(error?.code || error?.error_code || "").toLowerCase();
+  return (
+    code === "email_not_confirmed" ||
+    /email not confirmed/i.test(String(error?.message || ""))
+  );
+}
+// The resend button only makes sense while confirmation is the thing in the way;
+// every other state (fresh form, mode switch, a new attempt) hides it.
+function setResendVisible(visible) {
+  const button = document.getElementById("authResend");
+  if (button) button.hidden = !visible;
+}
+// Asks Supabase to send the confirmation email again. Resending is safe to
+// repeat: it never changes the account, and Supabase rate-limits it server-side.
+async function resendConfirmationEmail() {
+  const sb = await ensureSupabase();
+  const cfg = getSupabaseConfig();
+  const message = document.getElementById("authMessage");
+  const emailInput = document.getElementById("authEmail");
+  if (!sb || !cfg) {
+    message.textContent =
+      "Supabase is not configured yet. Add your project URL and publishable key to supabase-config.js.";
+    return;
+  }
+  const email = emailInput.value.trim();
+  if (!email) {
+    message.textContent =
+      "Enter your email above, then send the confirmation link again.";
+    emailInput.focus();
+    return;
+  }
+  message.textContent = "Sending…";
+  const { error } = await sb.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: cfg.redirectUrl },
+  });
+  if (error) {
+    // Mapped with signup=true: a failing mailer is the most likely cause here.
+    message.textContent = authErrorMessage(error, true);
+    return;
+  }
+  message.textContent = `Confirmation email sent to ${email}. Open the link, then sign in.`;
+}
+// Strips the single-use fragment a Supabase link arrives with. Purely cosmetic,
+// so it must never be able to break the flow that just succeeded.
+function clearUrlHash() {
+  if (typeof window === "undefined" || !window.location?.hash) return;
+  try {
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + window.location.search
+    );
+  } catch {
+    // No history API (sandboxed frame); leaving the hash is harmless.
+  }
+}
+// "Forgot password?" on the sign-in form. This is also the way out for an
+// account whose confirmation email never arrived: the reset link carries its own
+// session, so it works whether or not the address was ever confirmed. Worded so
+// it neither confirms nor denies that the address has an account.
+async function requestPasswordReset() {
+  const sb = await ensureSupabase();
+  const cfg = getSupabaseConfig();
+  const message = document.getElementById("authMessage");
+  const emailInput = document.getElementById("authEmail");
+  if (!sb || !cfg) {
+    message.textContent =
+      "Supabase is not configured yet. Add your project URL and publishable key to supabase-config.js.";
+    return;
+  }
+  const email = emailInput.value.trim();
+  if (!email) {
+    message.textContent = "Enter your email above, then send the reset link.";
+    emailInput.focus();
+    return;
+  }
+  message.textContent = "Sending…";
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: cfg.redirectUrl,
+  });
+  if (error) {
+    message.textContent = authErrorMessage(error, false);
+    return;
+  }
+  message.textContent = `If ${email} has an account, a reset link is on its way. Open it to choose a new password.`;
+}
+// Finishing the recovery link: set the new password, then hand over the signed-in
+// dashboard that the link's session has already earned.
+async function saveNewPassword(sb) {
+  const message = document.getElementById("authMessage");
+  const passwordInput = document.getElementById("authPassword");
+  const password = passwordInput.value;
+  if (String(password).length < 6) {
+    message.textContent = "Choose a password of at least 6 characters.";
+    passwordInput.focus();
+    return;
+  }
+  message.textContent = "Saving…";
+  const { data, error } = await sb.auth.updateUser({ password });
+  if (error) {
+    message.textContent = authErrorMessage(error, false);
+    return;
+  }
+  passwordResetPending = false;
+  passwordInput.value = "";
+  message.textContent = "Password updated. You're signed in.";
+  const user = data?.user ?? currentUser ?? null;
+  showSignedInChrome(user);
+  // The recovery fragment is single-use: drop it so a refresh does not re-open
+  // the card.
+  clearUrlHash();
+  await applySession(user);
+}
+// Change password: the signed-in counterpart to the recovery link. The open
+// session is enough to rotate the password, so there is no email round trip —
+// which also means this works while the project's mailer is down.
+function setPasswordError(message) {
+  const error = document.getElementById("passwordError");
+  if (error) error.textContent = message || "";
+}
+function openPasswordDialog() {
+  const overlay = document.getElementById("passwordOverlay");
+  // Reachable only from the signed-in chrome, but never open it without a
+  // session to update.
+  if (!overlay || !currentUser) return;
+  const account = document.getElementById("passwordAccount");
+  if (account) account.textContent = currentUser.email || "this account";
+  const next = document.getElementById("newPassword");
+  const confirm = document.getElementById("confirmPassword");
+  if (next) next.value = "";
+  if (confirm) confirm.value = "";
+  setPasswordError("");
+  overlay.hidden = false;
+  if (next) next.focus();
+}
+function closePasswordDialog() {
+  const overlay = document.getElementById("passwordOverlay");
+  // Never leave a typed password sitting in the DOM after the dialog closes.
+  const next = document.getElementById("newPassword");
+  const confirm = document.getElementById("confirmPassword");
+  if (next) next.value = "";
+  if (confirm) confirm.value = "";
+  setPasswordError("");
+  if (overlay) overlay.hidden = true;
+}
+async function saveChangedPassword() {
+  const next = document.getElementById("newPassword");
+  const confirm = document.getElementById("confirmPassword");
+  const password = next ? next.value : "";
+  if (String(password).length < 6) {
+    setPasswordError("Choose a password of at least 6 characters.");
+    next?.focus();
+    return;
+  }
+  if (password !== (confirm ? confirm.value : "")) {
+    setPasswordError("Both passwords must match.");
+    confirm?.focus();
+    return;
+  }
+  const sb = await ensureSupabase();
+  if (!sb) {
+    setPasswordError(
+      "Supabase is not configured yet. Add your project URL and publishable key to supabase-config.js."
+    );
+    return;
+  }
+  setPasswordError("Saving…");
+  const { error } = await sb.auth.updateUser({ password });
+  if (error) {
+    // authErrorMessage() words the expired-session case for a recovery link
+    // ("request a new one"), which is the wrong advice for a signed-in user:
+    // the fix is to sign in again on this device.
+    const expired = /auth session missing|session.*(missing|not found)/i.test(
+      String(error?.message || "")
+    );
+    setPasswordError(
+      expired
+        ? "Your session has expired. Sign in again, then change your password."
+        : authErrorMessage(error, false)
+    );
+    return;
+  }
+  // closePasswordDialog() clears both fields, so the new password does not
+  // linger in the DOM once it has been accepted.
+  closePasswordDialog();
+  showToast("Password updated. Keep it somewhere safe.");
 }
 async function handleAuth(event) {
   event.preventDefault();
   const sb = await ensureSupabase();
   const cfg = getSupabaseConfig();
+  const message = document.getElementById("authMessage");
   if (!sb || !cfg) {
-    document.getElementById("authMessage").textContent =
+    message.textContent =
       "Supabase is not configured yet. Add your project URL and publishable key to supabase-config.js.";
     return;
   }
+  const mode = document.getElementById("authForm").dataset.mode;
+  if (mode === "reset") {
+    await saveNewPassword(sb);
+    return;
+  }
   const email = document.getElementById("authEmail").value.trim();
-  const password = document.getElementById("authPassword").value;
-  const signup = document.getElementById("authForm").dataset.mode === "signup";
-  const message = document.getElementById("authMessage");
+  const passwordInput = document.getElementById("authPassword");
+  setResendVisible(false);
+  const password = passwordInput.value;
+  const signup = mode === "signup";
   message.textContent = "Working…";
   const result = signup
     ? await sb.auth.signUp({
@@ -2206,13 +2649,29 @@ async function handleAuth(event) {
       })
     : await sb.auth.signInWithPassword({ email, password });
   if (result.error) {
-    message.textContent = result.error.message;
+    message.textContent = authErrorMessage(result.error, signup);
+    setResendVisible(authNeedsConfirmation(result.error));
     return;
   }
-  message.textContent =
-    signup && !result.data.session
-      ? "Check your email to confirm your account, then sign in."
-      : "Signed in successfully.";
+  const session = result.data?.session;
+  if (session?.user) {
+    // Applied straight from the response rather than waiting on the auth event:
+    // the event is a second, async delivery channel, and applySession() shares
+    // one in-flight apply so the two cannot race.
+    await applySession(session.user);
+    passwordInput.value = "";
+    message.textContent = "Signed in successfully.";
+    return;
+  }
+  if (signup) {
+    // Confirmation is on and the email went out: point the form at the next step,
+    // with a retry in reach in case the message never arrives.
+    setAuthMode(false);
+    setResendVisible(true);
+    message.textContent = "Check your email to confirm your account, then sign in.";
+    return;
+  }
+  message.textContent = "Signed in successfully.";
 }
 // Builds a self-contained, print-ready A4 report from the current state. It is
 // shown in a sandboxed iframe and printed via the browser's own Print → Save as
@@ -2338,6 +2797,8 @@ body { margin: 0; font: 9.5px/1.45 -apple-system, "Segoe UI", Roboto, Arial, san
 </body></html>`;
 }
 async function init() {
+  if (initialized) return;
+  initialized = true;
   initCookieBanner();
   const snapToggle = document.getElementById("resourceSnap");
   if (snapToggle) {
@@ -2416,9 +2877,11 @@ async function init() {
     const journalOverlay = document.getElementById("journalOverlay");
     const reportOverlay = document.getElementById("reportOverlay");
     const shareOverlay = document.getElementById("shareOverlay");
+    const passwordOverlay = document.getElementById("passwordOverlay");
     if (journalOverlay && !journalOverlay.hidden) return;
     if (reportOverlay && !reportOverlay.hidden) return;
     if (shareOverlay && !shareOverlay.hidden) return;
+    if (passwordOverlay && !passwordOverlay.hidden) return;
     if (event.key === "/") {
       event.preventDefault();
       const search = document.getElementById("search");
@@ -2574,6 +3037,57 @@ async function init() {
     URL.revokeObjectURL(link.href);
     showToast("Progress export prepared.");
   });
+  // Import: paste a previously exported backup and replace this browser's
+  // stored state. The overlay is opened by the import button; the apply
+  // button validates the JSON shape before clobbering local data.
+  const importOverlay = document.getElementById("importOverlay");
+  document.getElementById("importData").addEventListener("click", () => {
+    importOverlay.hidden = false;
+    document.getElementById("importData").focus();
+  });
+  document.getElementById("importCancel").addEventListener("click", () => {
+    importOverlay.hidden = true;
+    document.getElementById("importData").value = "";
+  });
+  importOverlay.addEventListener("click", event => {
+    if (event.target === importOverlay) {
+      importOverlay.hidden = true;
+      document.getElementById("importData").value = "";
+    }
+  });
+  importOverlay.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      importOverlay.hidden = true;
+      document.getElementById("importData").value = "";
+    }
+  });
+  document.getElementById("importApply").addEventListener("click", () => {
+    const raw = document.getElementById("importData").value.trim();
+    const errorEl = document.getElementById("importError");
+    if (!raw) {
+      errorEl.textContent = "Paste an export file first.";
+      return;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      errorEl.textContent = "That is not valid JSON.";
+      return;
+    }
+    const candidate = parsed && typeof parsed === "object" ? parsed.state || parsed : null;
+    if (!candidate || typeof candidate !== "object") {
+      errorEl.textContent = "No study state found in that backup.";
+      return;
+    }
+    const state = normalizeState(candidate);
+    saveState(state);
+    importOverlay.hidden = true;
+    document.getElementById("importData").value = "";
+    renderTracks(state);
+    updateSummary(state);
+    showToast("Progress imported from backup.");
+  });
   document.getElementById("resetData").addEventListener("click", () => {
     if (
       confirm(
@@ -2593,7 +3107,7 @@ async function init() {
     .addEventListener("click", () =>
       setAuthMode(document.getElementById("authForm").dataset.mode !== "signup")
     );
-  document.getElementById("signOut").addEventListener("click", () => {
+  document.getElementById("signOutTopbar").addEventListener("click", () => {
     ensureSupabase().then(sb => sb?.auth.signOut());
   });
   const profileCard = document.querySelector(".profile-card");
@@ -2607,6 +3121,41 @@ async function init() {
   if (headlineEl) {
     headlineEl.addEventListener("click", event => {
       if (event.target.closest("[data-edit-name]")) editProfileName();
+    });
+  }
+  document
+    .getElementById("authResend")
+    .addEventListener("click", resendConfirmationEmail);
+  document
+    .getElementById("authForgot")
+    .addEventListener("click", requestPasswordReset);
+  // Authenticated "Change password" on the profile card. Opened, saved and
+  // closed entirely in-page against the session that is already signed in.
+  const passwordOverlayEl = document.getElementById("passwordOverlay");
+  const changePasswordOpen = document.getElementById("changePasswordOpen");
+  if (passwordOverlayEl && changePasswordOpen) {
+    changePasswordOpen.addEventListener("click", openPasswordDialog);
+    document
+      .getElementById("passwordCancel")
+      .addEventListener("click", closePasswordDialog);
+    document
+      .getElementById("passwordSave")
+      .addEventListener("click", saveChangedPassword);
+    passwordOverlayEl.addEventListener("click", event => {
+      if (event.target === passwordOverlayEl) closePasswordDialog();
+    });
+    passwordOverlayEl.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        closePasswordDialog();
+      } else if (
+        event.key === "Enter" &&
+        event.target instanceof HTMLElement &&
+        event.target.matches("#newPassword, #confirmPassword")
+      ) {
+        event.preventDefault();
+        saveChangedPassword();
+      }
     });
   }
   const boardNameSave = document.getElementById("leaderboardNameSave");
@@ -2626,15 +3175,63 @@ async function init() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") keepaliveFlush();
   });
+  // Captured before the client initializes: supabase-js parses the URL fragment
+  // for a session on first use and clears it, so reading it afterwards is a race.
+  const initialHash = window.location.hash || "";
   if (!(await ensureSupabase())) return;
+  // Subscribed before the first session is applied, so a slow or failed initial
+  // apply cannot leave the page deaf to later sign-ins.
+  //
+  // The callback must stay synchronous: supabase-js holds its auth lock while
+  // dispatching it, and any Supabase call made inside deadlocks the client
+  // (Supabase troubleshooting: "Why is my supabase API call not returning?").
+  // applySession() reads the session and the progress row, so defer it out of
+  // the lock instead of calling it inline — an awaited call in here is how
+  // sign-in "succeeds" and then every later request hangs forever.
+  supabase.auth.onAuthStateChange((event, session) => {
+    const user = session?.user ?? null;
+    // Pinned to this document too, so a queued apply can never be run against a
+    // page that replaced this one (hot reload, or a torn-down test window).
+    const doc = document;
+    setTimeout(() => {
+      if (doc !== document) return;
+      // A recovery link grants a session as well, but the reason the user is here
+      // is to set a password: raise the reset card before the session chrome, so
+      // the dashboard cannot replace it mid-flow.
+      if (event === "PASSWORD_RECOVERY") beginPasswordReset(user?.email);
+      applySession(user);
+    }, 0);
+  });
   const {
     data: { session },
   } = await supabase.auth.getSession();
+  const arrivingFromReset = initialHash.includes("type=recovery");
+  // Raised before the session applies, and with the email the link carries.
+  if (arrivingFromReset) beginPasswordReset(session?.user?.email);
   await applySession(session?.user);
-  supabase.auth.onAuthStateChange((_event, session) =>
-    applySession(session?.user)
-  );
+  // Show verification-complete overlay when arriving from email confirmation.
+  // Supabase redirects with #access_token or #type=signup in the hash.
+  if (
+    !arrivingFromReset &&
+    (initialHash.includes("access_token") ||
+      initialHash.includes("type=signup") ||
+      initialHash.includes("type=magiclink"))
+  ) {
+    const overlay = document.getElementById("verifyOverlay");
+    if (overlay) {
+      overlay.hidden = false;
+      // Auto-dismiss after 2.5 seconds
+      setTimeout(() => { overlay.hidden = true; }, 2500);
+      // Clean the hash so refreshing doesn't re-show the overlay
+      clearUrlHash();
+    }
+  }
 }
+// Guard against double-initialization. init() attaches listeners to static
+// DOM nodes; if the module ever runs twice (hot reload, duplicate import)
+// handlers would double-fire. The flag is reset only by a full page load.
+let initialized = false;
+
 // init() is intentionally NOT called here. The browser boot file
 // (study-dashboard-boot.js) imports init and runs it so this module can be
 // imported by tests without side effects.
@@ -2678,6 +3275,8 @@ export {
   markReviewRedo,
   buildSemesterReport,
   weekStartKey,
+  weekRangeLabel,
+  authErrorMessage,
   refreshLeaderboard,
   weeklySeries,
   renderProfile,
