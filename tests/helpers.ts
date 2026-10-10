@@ -292,6 +292,8 @@ export function makeFakeSupabase(
 }
 
 export interface BootOptions {
+  /** Page URL override for testing local previews and deployed origins. */
+  url?: string;
   /** localStorage keys to seed before the module boots. */
   preSeed?: Record<string, string>;
   /** SUPABASE_CONFIG to expose on the window; omit for the local-only path. */
@@ -313,7 +315,7 @@ export interface BootOptions {
  */
 export async function bootApp(options: BootOptions = {}) {
   const dom = new JSDOM(HTML, {
-    url: `http://localhost:3000/study-dashboard.html${options.hash ?? ""}`,
+    url: options.url ?? `http://localhost:3000/study-dashboard.html${options.hash ?? ""}`,
     runScripts: "outside-only",
     pretendToBeVisual: true,
   });

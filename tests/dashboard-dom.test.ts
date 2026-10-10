@@ -9,6 +9,26 @@ import {
 } from "./helpers";
 
 describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
+  it("opens a local demo without initializing Supabase or exposing account controls", async () => {
+    const factory = vi.fn();
+    const { doc } = await bootApp({
+      url: "http://localhost:3000/study-dashboard.html?demo=1",
+      supabaseConfig: { url: "https://supabase.example.co", anonKey: "test" },
+      supabaseClientFactory: factory,
+    });
+    expect(byId(doc, "authScreen")!.hidden).toBe(true);
+    expect(byId(doc, "profileSecurity")!.hidden).toBe(true);
+    expect(byId(doc, "signOutTopbar")!.classList.contains("visible")).toBe(false);
+    expect(factory).not.toHaveBeenCalled();
+    doc.querySelector<HTMLInputElement>('.task-row[data-task-id="python-1"] .check')!.click();
+    expect((stored(doc)!.completed as Record<string, boolean>)["python-1"]).toBe(true);
+  });
+
+  it("keeps authentication visible for demo URLs on deployed origins", async () => {
+    const { doc } = await bootApp({ url: "https://semassist.runs-on.dev/study-dashboard.html?demo=1" });
+    expect(byId(doc, "authScreen")!.hidden).toBe(false);
+  });
+
   it("renders all track cards on boot without a session", async () => {
     const { doc } = await bootApp();
     expect(doc.querySelectorAll("#checkpoints .track-card").length).toBe(6);

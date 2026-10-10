@@ -2277,9 +2277,9 @@ async function applySession(user) {
 // password. While that is pending the auth screen stays up instead of the
 // dashboard, so the reset card cannot be swapped out from under them.
 let passwordResetPending = false;
-function showSignedInChrome(user) {
+function showSignedInChrome(user, localDemo = false) {
   const signedIn = Boolean(user) && !passwordResetPending;
-  document.getElementById("authScreen").hidden = signedIn;
+  document.getElementById("authScreen").hidden = signedIn || localDemo;
   const signOutBtn = document.getElementById("signOutTopbar");
   if (signOutBtn) signOutBtn.classList.toggle("visible", signedIn);
   // Changing a password needs a session, so the control lives and dies with the
@@ -3179,6 +3179,13 @@ async function init() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") keepaliveFlush();
   });
+  if (
+    ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname) &&
+    new URLSearchParams(window.location.search).get("demo") === "1"
+  ) {
+    showSignedInChrome(null, true);
+    return;
+  }
   // Captured before the client initializes: supabase-js parses the URL fragment
   // for a session on first use and clears it, so reading it afterwards is a race.
   const initialHash = window.location.hash || "";

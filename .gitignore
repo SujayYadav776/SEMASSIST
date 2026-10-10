@@ -119,3 +119,6 @@ client/public/__manus__/version.json
 client/public/__manus__/
 
 .vercel
+
+# Private learner backups and migration staging (never commit personal data)
+.freebuff/semassist-migration/

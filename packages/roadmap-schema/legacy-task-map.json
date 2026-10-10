@@ -1,0 +1,462 @@
+{
+  "mappingVersion": "1.0.0",
+  "sourceCommit": "07627819773012c188a835dd0379518bfd7f7ce3",
+  "tasks": [
+    {
+      "legacyTaskId": "python-1",
+      "taskId": "a4628706-9f92-4eef-856a-bb778c98655d",
+      "trackId": "python",
+      "title": "Learn the basics: syntax, variables/data types, operators, type casting, strings, comments, and annotations."
+    },
+    {
+      "legacyTaskId": "python-2",
+      "taskId": "a5d10a85-ee50-4e40-8573-7aac58592911",
+      "trackId": "python",
+      "title": "Control flow: conditionals, loops, functions, builtin functions, and exception handling."
+    },
+    {
+      "legacyTaskId": "python-3",
+      "taskId": "199fc450-6a69-4bf4-92ff-492bfb8c5d27",
+      "trackId": "python",
+      "title": "Master collections: lists, tuples, sets, dictionaries, and list comprehensions."
+    },
+    {
+      "legacyTaskId": "python-4",
+      "taskId": "8d75e381-feff-45e3-8b65-f80b4a629e96",
+      "trackId": "python",
+      "title": "Work through data structures: arrays, linked lists, stacks, queues, hash maps, BSTs, recursion, and sorting."
+    },
+    {
+      "legacyTaskId": "python-5",
+      "taskId": "de52ec43-0d26-4f1d-b579-8db4ca731eee",
+      "trackId": "python",
+      "title": "Learn modules, custom modules, PyPI, pip, and pyproject.toml."
+    },
+    {
+      "legacyTaskId": "python-6",
+      "taskId": "17648ba0-806f-4e8d-9f07-76f97547936a",
+      "trackId": "python",
+      "title": "Build an OOP mini-project using classes, inheritance, methods, encapsulation, and scope."
+    },
+    {
+      "legacyTaskId": "python-7",
+      "taskId": "de02f131-a15e-4ef6-aa4e-3f3d25f7796f",
+      "trackId": "python",
+      "title": "Use lambdas, decorators, iterators, generators, context managers, and regular expressions."
+    },
+    {
+      "legacyTaskId": "python-8",
+      "taskId": "188bfb7e-29f7-4d33-b903-df7d0bc0c3fa",
+      "trackId": "python",
+      "title": "Set up venv or virtualenv; explain pyenv, Pipenv, uv, and environment isolation."
+    },
+    {
+      "legacyTaskId": "python-9",
+      "taskId": "7cf28b1e-2e8f-4df8-9011-d93d2fcc6279",
+      "trackId": "python",
+      "title": "Build a file-handling CampusOps CLI with configuration, logging, safe errors, and a README."
+    },
+    {
+      "legacyTaskId": "python-10",
+      "taskId": "f3f2ecf3-3dfd-438d-8036-56af82272744",
+      "trackId": "python",
+      "title": "Add typing and quality checks with a formatter/linter plus pytest or unittest."
+    },
+    {
+      "legacyTaskId": "python-11",
+      "taskId": "16fdca3f-6097-4b91-aff2-3023c2d32059",
+      "trackId": "python",
+      "title": "Explain the GIL; compare threading, multiprocessing, and async for an OS-adjacent workload."
+    },
+    {
+      "legacyTaskId": "python-12",
+      "taskId": "ae9a522f-e422-4425-9f33-b058e5e599f9",
+      "trackId": "python",
+      "title": "Later: choose one framework path—FastAPI, Flask, or Django—after foundations are solid."
+    },
+    {
+      "legacyTaskId": "python30-1",
+      "taskId": "34b07276-a088-44f1-925c-d7004f9f88e4",
+      "trackId": "python30",
+      "title": "Set up Python and VS Code; run your first Hello World program."
+    },
+    {
+      "legacyTaskId": "python30-2",
+      "taskId": "5605aaa5-dafb-487b-bb99-d8920aedff9e",
+      "trackId": "python30",
+      "title": "Use variables and built-in functions to inspect values and types."
+    },
+    {
+      "legacyTaskId": "python30-3",
+      "taskId": "e55d2c3d-6ecc-40f4-a146-3f65b1502764",
+      "trackId": "python30",
+      "title": "Practice arithmetic, comparison, logical, and assignment operators."
+    },
+    {
+      "legacyTaskId": "python30-4",
+      "taskId": "0c3c8418-fd68-43f9-9b45-646805b5754d",
+      "trackId": "python30",
+      "title": "Manipulate strings with indexing, slicing, formatting, and methods."
+    },
+    {
+      "legacyTaskId": "python30-5",
+      "taskId": "1a124fac-6e68-425d-a9c1-aecfcf507595",
+      "trackId": "python30",
+      "title": "Create, update, slice, and loop through Python lists."
+    },
+    {
+      "legacyTaskId": "python30-6",
+      "taskId": "a6ae04d2-34b4-4a51-bb20-2ff21b0a88d3",
+      "trackId": "python30",
+      "title": "Work with immutable tuples and convert between sequences."
+    },
+    {
+      "legacyTaskId": "python30-7",
+      "taskId": "4c0d3ae1-c9fb-4fde-910e-3ce4bfc8ee25",
+      "trackId": "python30",
+      "title": "Use sets for unique values, membership checks, and set operations."
+    },
+    {
+      "legacyTaskId": "python30-8",
+      "taskId": "12388144-c26f-4b3d-b34d-21e7be558139",
+      "trackId": "python30",
+      "title": "Create dictionaries and safely read, update, and iterate key-value data."
+    },
+    {
+      "legacyTaskId": "python30-9",
+      "taskId": "d7fc0e75-7f16-4f0d-bcda-4cc4f31023a5",
+      "trackId": "python30",
+      "title": "Write decisions with if, elif, else, and nested conditionals."
+    },
+    {
+      "legacyTaskId": "python30-10",
+      "taskId": "ce23ea99-f48a-46d6-a9d7-1c901ff5b1d8",
+      "trackId": "python30",
+      "title": "Use for and while loops, ranges, break, continue, and pass."
+    },
+    {
+      "legacyTaskId": "python30-11",
+      "taskId": "0884d1b2-b156-4a23-baa8-aa0c99c586a6",
+      "trackId": "python30",
+      "title": "Define reusable functions with arguments, returns, and defaults."
+    },
+    {
+      "legacyTaskId": "python30-12",
+      "taskId": "758e98a4-ea80-4435-8943-7cfae14d3a5d",
+      "trackId": "python30",
+      "title": "Import standard and custom modules to organize Python code."
+    },
+    {
+      "legacyTaskId": "python30-13",
+      "taskId": "19f60ed2-4df2-4a88-9d20-e71547ff8221",
+      "trackId": "python30",
+      "title": "Build concise transformed collections with list comprehensions."
+    },
+    {
+      "legacyTaskId": "python30-14",
+      "taskId": "050bcdb1-5f1f-4f75-89b5-8d50d323995f",
+      "trackId": "python30",
+      "title": "Use map, filter, reduce, lambdas, and higher-order functions."
+    },
+    {
+      "legacyTaskId": "python30-15",
+      "taskId": "dd611e55-191b-4523-b1fe-0af1e54f0e38",
+      "trackId": "python30",
+      "title": "Recognize common Python type errors and debug their causes."
+    },
+    {
+      "legacyTaskId": "python30-16",
+      "taskId": "df28e126-096d-4b81-82cc-c2a7361eab5d",
+      "trackId": "python30",
+      "title": "Create and format dates and times with Python's datetime tools."
+    },
+    {
+      "legacyTaskId": "python30-17",
+      "taskId": "1ff70596-cdca-4af2-8fcd-2c904998d41d",
+      "trackId": "python30",
+      "title": "Handle runtime failures with try, except, else, and finally."
+    },
+    {
+      "legacyTaskId": "python30-18",
+      "taskId": "3e677f7c-a76b-4723-a3d6-c2ab31467d24",
+      "trackId": "python30",
+      "title": "Find, validate, and replace text using regular expressions."
+    },
+    {
+      "legacyTaskId": "python30-19",
+      "taskId": "b8cb778a-bf83-4084-a838-820a718d5aa8",
+      "trackId": "python30",
+      "title": "Read from and write to text files safely with context managers."
+    },
+    {
+      "legacyTaskId": "python30-20",
+      "taskId": "b9c495c3-b618-41f1-a4ca-cee2b9ba5f5d",
+      "trackId": "python30",
+      "title": "Install and manage packages with pip and package metadata."
+    },
+    {
+      "legacyTaskId": "python30-21",
+      "taskId": "9c8bcf79-1d5e-45ba-8b89-f12d3c1eb954",
+      "trackId": "python30",
+      "title": "Model data with classes, objects, attributes, and methods."
+    },
+    {
+      "legacyTaskId": "python30-22",
+      "taskId": "98155db7-8a84-487f-a6a2-48d98caccc75",
+      "trackId": "python30",
+      "title": "Extract structured information from a web page responsibly."
+    },
+    {
+      "legacyTaskId": "python30-23",
+      "taskId": "cc38d839-b707-4a34-92b5-a46cba00bd2d",
+      "trackId": "python30",
+      "title": "Create and use an isolated virtual environment for a project."
+    },
+    {
+      "legacyTaskId": "python30-24",
+      "taskId": "bcbd9d00-76fb-4000-9ef9-eda65b88ce93",
+      "trackId": "python30",
+      "title": "Calculate descriptive statistics and interpret basic data summaries."
+    },
+    {
+      "legacyTaskId": "python30-25",
+      "taskId": "addd35ba-c601-4cd3-b0c5-06d9e3fd30d8",
+      "trackId": "python30",
+      "title": "Load, explore, and transform tabular data with pandas."
+    },
+    {
+      "legacyTaskId": "python30-26",
+      "taskId": "30e08aa5-e55d-40cd-9dd3-aad71cf1dc56",
+      "trackId": "python30",
+      "title": "Build a small Python web project or web-facing exercise."
+    },
+    {
+      "legacyTaskId": "python30-27",
+      "taskId": "2fbc48c7-7cb2-467e-9555-cbbf7c238e28",
+      "trackId": "python30",
+      "title": "Connect Python concepts with MongoDB data operations."
+    },
+    {
+      "legacyTaskId": "python30-28",
+      "taskId": "6d296f94-9d41-4c04-96e4-3fe1831f191b",
+      "trackId": "python30",
+      "title": "Consume an API and work with structured response data."
+    },
+    {
+      "legacyTaskId": "python30-29",
+      "taskId": "07341f44-1db1-4f9d-a6f4-1064bc58cbf5",
+      "trackId": "python30",
+      "title": "Build a simple API endpoint and test its behavior."
+    },
+    {
+      "legacyTaskId": "python30-30",
+      "taskId": "f18a915b-a4f7-466b-89e3-ad9ebd6b2fc7",
+      "trackId": "python30",
+      "title": "Review the challenge, consolidate notes, and plan what to build next."
+    },
+    {
+      "legacyTaskId": "java-1",
+      "taskId": "55f59a11-5444-4b5d-9057-6c9876739b08",
+      "trackId": "java",
+      "title": "Learn Java basics: lifecycle, syntax, data types, scope, casting, strings, math, arrays, loops, conditionals, and methods."
+    },
+    {
+      "legacyTaskId": "java-2",
+      "taskId": "26e8f696-7549-496b-bf8e-941f3eded46f",
+      "trackId": "java",
+      "title": "Use classes, objects, attributes, methods, access specifiers, static members, and nested classes."
+    },
+    {
+      "legacyTaskId": "java-3",
+      "taskId": "36596791-2b23-4f40-99a6-fe36ecd23c76",
+      "trackId": "java",
+      "title": "Complete OOP: abstraction, inheritance, overriding, dynamic binding, interfaces, and encapsulation."
+    },
+    {
+      "legacyTaskId": "java-4",
+      "taskId": "5cedfb95-0811-44ec-9c6e-fe9574ef8fc2",
+      "trackId": "java",
+      "title": "Use packages, enums, final, records, annotations, initializer blocks, and modules appropriately."
+    },
+    {
+      "legacyTaskId": "java-5",
+      "taskId": "1e6c8556-b3d9-44ef-9dde-537b75ee0581",
+      "trackId": "java",
+      "title": "Master ArrayList, Set, Map, Queue, Stack, Deque, Iterator, generics, and Optionals."
+    },
+    {
+      "legacyTaskId": "java-6",
+      "taskId": "fb20ffa6-4505-47d8-aa39-b6c69551327d",
+      "trackId": "java",
+      "title": "Handle expected and unexpected failure with checked/unchecked exceptions and an error strategy."
+    },
+    {
+      "legacyTaskId": "java-7",
+      "taskId": "3ee07528-e1c7-41f0-a21c-3ddec179b1c6",
+      "trackId": "java",
+      "title": "Practice file I/O, date/time, regular expressions, and logging in a CampusOps utility."
+    },
+    {
+      "legacyTaskId": "java-8",
+      "taskId": "dbaa9783-89fb-430a-8599-e27e36f57395",
+      "trackId": "java",
+      "title": "Use Maven or Gradle to manage dependencies, run tests, and create a reproducible project."
+    },
+    {
+      "legacyTaskId": "java-9",
+      "taskId": "103e36dc-68b6-4e20-a8b1-e7b1f837a218",
+      "trackId": "java",
+      "title": "Work through lambdas, functional interfaces, functional composition, and the Stream API."
+    },
+    {
+      "legacyTaskId": "java-10",
+      "taskId": "7ef446ee-f293-433f-9a8b-4833b0eb6ef6",
+      "trackId": "java",
+      "title": "Build a producer–consumer lab; explain virtual threads, Java Memory Model, and volatile."
+    },
+    {
+      "legacyTaskId": "java-11",
+      "taskId": "d71b0f9c-fc78-4570-98f9-75c7b6a42bd7",
+      "trackId": "java",
+      "title": "Add JUnit unit tests and one integration-test scenario; use mocks only when they help."
+    },
+    {
+      "legacyTaskId": "java-12",
+      "taskId": "06d1db8b-6c33-4bdc-9b9c-2df90b64541a",
+      "trackId": "java",
+      "title": "Later: begin JDBC/database access, then consider Spring Boot once core Java is comfortable."
+    },
+    {
+      "legacyTaskId": "os-1",
+      "taskId": "c81da31e-2704-4723-8903-001695cfb15a",
+      "trackId": "os",
+      "title": "Navigate Linux confidently: files, permissions, users, environment variables, pipes, and redirects."
+    },
+    {
+      "legacyTaskId": "os-2",
+      "taskId": "51b068f3-9549-4568-b0d8-e73b9aa5bd91",
+      "trackId": "os",
+      "title": "Use ps, top/htop, lsof, strace, and logs to observe a running process."
+    },
+    {
+      "legacyTaskId": "os-3",
+      "taskId": "f0d50924-b3eb-42dd-b3bf-76835a945e34",
+      "trackId": "os",
+      "title": "Explain lifecycle, parent/child relationships, exit status, signals, and file descriptors."
+    },
+    {
+      "legacyTaskId": "os-4",
+      "taskId": "053bc21a-a508-4d86-a5c6-b3d70db12431",
+      "trackId": "os",
+      "title": "Write a C program using fork, exec, wait, and a pipe; document what changes in each process."
+    },
+    {
+      "legacyTaskId": "os-5",
+      "taskId": "e6767481-fdd7-4ddd-a054-c3bc7d0cff0a",
+      "trackId": "os",
+      "title": "Explain stack, heap, code, and data segments; debug a memory issue with sanitizers or a debugger."
+    },
+    {
+      "legacyTaskId": "os-6",
+      "taskId": "d6cbfa2c-0d8a-44f9-94ba-fd1e2e001c54",
+      "trackId": "os",
+      "title": "Create a race condition, reproduce it, then fix it with a lock or condition variable."
+    },
+    {
+      "legacyTaskId": "os-7",
+      "taskId": "d6582263-4765-4e67-b479-dabaea797b68",
+      "trackId": "os",
+      "title": "Draw a file read through process, system call, kernel, filesystem, and storage."
+    },
+    {
+      "legacyTaskId": "os-8",
+      "taskId": "c06a7cb7-f3bb-4433-99fb-18a8556d4284",
+      "trackId": "os",
+      "title": "Build a process inspector or mini shell subset and write a failure-mode note."
+    },
+    {
+      "legacyTaskId": "algorithms-1",
+      "taskId": "9b119ba0-6f43-404d-8f14-8eea19e2e65f",
+      "trackId": "algorithms",
+      "title": "Write Big-O explanations for arrays, linked lists, stacks, queues, hash maps, and heaps."
+    },
+    {
+      "legacyTaskId": "algorithms-2",
+      "taskId": "cae94390-2bc3-42cf-875d-24c8d8b0b52a",
+      "trackId": "algorithms",
+      "title": "Implement a stack, queue, and linked list in Python and Java with tests."
+    },
+    {
+      "legacyTaskId": "algorithms-3",
+      "taskId": "f94b06e9-5629-422d-a9b6-122bd080386a",
+      "trackId": "algorithms",
+      "title": "Complete 15 array, string, hashing, or two-pointer problems and re-solve mistakes."
+    },
+    {
+      "legacyTaskId": "algorithms-4",
+      "taskId": "521dc059-d022-4304-ab5c-8d838375a9dc",
+      "trackId": "algorithms",
+      "title": "Complete 15 recursion, sorting, binary-search, tree, or heap problems; state the invariant."
+    },
+    {
+      "legacyTaskId": "algorithms-5",
+      "taskId": "4b5a91b0-5b6b-41df-88af-97fadaa5cd87",
+      "trackId": "algorithms",
+      "title": "Create an error log: first wrong idea, final invariant, complexity, and a variation."
+    },
+    {
+      "legacyTaskId": "algorithms-6",
+      "taskId": "ae74a5e4-3160-4f90-974a-b2a7c0ff9bc9",
+      "trackId": "algorithms",
+      "title": "Benchmark a data-structure task in Python and Java; state what the benchmark can and cannot prove."
+    },
+    {
+      "legacyTaskId": "campusops-1",
+      "taskId": "c96f7d5f-0011-4102-bb0b-b46be030d9c8",
+      "trackId": "campusops",
+      "title": "Write a one-page problem statement, users, constraints, and success measure."
+    },
+    {
+      "legacyTaskId": "campusops-2",
+      "taskId": "39051e77-f231-4cef-9786-1ce8fbd1b32e",
+      "trackId": "campusops",
+      "title": "Create the Java domain model, validation rules, and repository boundary with tests."
+    },
+    {
+      "legacyTaskId": "campusops-3",
+      "taskId": "58d599e3-de58-4cac-a2b3-04db1bde15a9",
+      "trackId": "campusops",
+      "title": "Create Python import, report, cleanup, and health-check commands."
+    },
+    {
+      "legacyTaskId": "campusops-4",
+      "taskId": "ccb04694-e677-4328-81e5-30d1ab092dd9",
+      "trackId": "campusops",
+      "title": "Run it on Linux; document environment variables, processes, ports, logs, and shutdown."
+    },
+    {
+      "legacyTaskId": "campusops-5",
+      "taskId": "df786b2f-93dc-4f57-b409-f4d76474b508",
+      "trackId": "campusops",
+      "title": "Add a C process-inspector, producer–consumer queue, or shell lab component."
+    },
+    {
+      "legacyTaskId": "campusops-6",
+      "taskId": "a20c7e50-8435-439d-b022-0ee7f19b182d",
+      "trackId": "campusops",
+      "title": "Create an architecture diagram, README, test report, benchmark note, and retrospective."
+    },
+    {
+      "legacyTaskId": "campusops-7",
+      "taskId": "b130a36a-7e57-4f6b-8cba-98d4f91ec6b3",
+      "trackId": "campusops",
+      "title": "Ask a reviewer: what would fail first, and what concept is weakest?"
+    },
+    {
+      "legacyTaskId": "campusops-8",
+      "taskId": "56525c60-aa21-4846-bf10-8d3dfb7b270f",
+      "trackId": "campusops",
+      "title": "Deliver a reproducible clean-environment demo and record the next technical debt item."
+    }
+  ]
+}

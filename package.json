@@ -13,7 +13,10 @@
     "test": "vitest run",
     "format": "prettier --write .",
     "hooks:install": "sh scripts/install-autopush-hook.sh",
-    "smtp:configure": "node --env-file-if-exists=.env.local scripts/configure-auth-smtp.mjs"
+    "smtp:configure": "node --env-file-if-exists=.env.local scripts/configure-auth-smtp.mjs",
+    "roadmap:validate": "tsx scripts/validate-roadmap.ts",
+    "roadmap:check": "tsc -p packages/roadmap-schema/tsconfig.json",
+    "roadmap:migrate": "tsx scripts/prepare-legacy-migration.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

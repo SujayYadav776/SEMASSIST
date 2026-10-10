@@ -1,0 +1,193 @@
+{
+  "schemaVersion": "1.0.0",
+  "packageId": "363169ff-ed7a-4977-9f72-8cc99920c1d7",
+  "generatedAt": "2026-10-10T00:00:00Z",
+  "generator": {
+    "name": "SEMASSIST fixture",
+    "version": "1.0.0",
+    "assumptions": [
+      "Beginner; 45 minutes per study day"
+    ]
+  },
+  "importKind": "new",
+  "roadmap": {
+    "roadmapId": "a754c0d1-6e9d-406d-9645-85eeea40f2e5",
+    "title": "Beginner Python",
+    "goals": [
+      "Understand variables and conditionals"
+    ],
+    "subject": "Python",
+    "level": "beginner",
+    "learnerAssumptions": [
+      "No prior programming experience"
+    ]
+  },
+  "content": {
+    "revisionId": "c5e7c007-9c00-4b92-9768-558c222c0b2c",
+    "topics": [
+      {
+        "topicId": "cc18197c-cd13-4aa4-a188-dde8193e2e93",
+        "title": "Variables",
+        "objectives": [
+          "Variables"
+        ],
+        "prerequisiteTopicIds": [
+          "c7f34fcd-78e7-4a2f-b5d8-3aa324896f18"
+        ],
+        "resourceIds": [
+          "4a4dc8b7-38fe-448b-a2b5-aa91af3f2cf7"
+        ],
+        "difficulty": "beginner",
+        "classification": "core"
+      },
+      {
+        "topicId": "c7f34fcd-78e7-4a2f-b5d8-3aa324896f18",
+        "title": "Conditionals",
+        "objectives": [
+          "Conditionals"
+        ],
+        "prerequisiteTopicIds": [
+          "cc18197c-cd13-4aa4-a188-dde8193e2e93"
+        ],
+        "resourceIds": [
+          "4a4dc8b7-38fe-448b-a2b5-aa91af3f2cf7"
+        ],
+        "difficulty": "beginner",
+        "classification": "core"
+      }
+    ],
+    "tasks": [
+      {
+        "taskId": "e6fcc9d1-8b89-4db1-a067-d43ea6e749e6",
+        "topicId": "cc18197c-cd13-4aa4-a188-dde8193e2e93",
+        "title": "Practice variables",
+        "instructions": "Use the reference to practice and explain the result.",
+        "objective": "Practice variables",
+        "type": "learn",
+        "required": true,
+        "minutes": 30,
+        "resourceIds": [
+          "4a4dc8b7-38fe-448b-a2b5-aa91af3f2cf7"
+        ],
+        "criteria": [
+          "Explain the concept and produce a small working example"
+        ]
+      },
+      {
+        "taskId": "337b5cdd-0d34-4353-838a-e2232ef1f743",
+        "topicId": "c7f34fcd-78e7-4a2f-b5d8-3aa324896f18",
+        "title": "Practice conditionals",
+        "instructions": "Use the reference to practice and explain the result.",
+        "objective": "Practice conditionals",
+        "type": "learn",
+        "required": true,
+        "minutes": 30,
+        "resourceIds": [
+          "4a4dc8b7-38fe-448b-a2b5-aa91af3f2cf7"
+        ],
+        "criteria": [
+          "Explain the concept and produce a small working example"
+        ]
+      },
+      {
+        "taskId": "57028900-1cd9-44ed-9fbe-5660a74fcb88",
+        "topicId": "cc18197c-cd13-4aa4-a188-dde8193e2e93",
+        "title": "Recall variables",
+        "instructions": "Use the reference to practice and explain the result.",
+        "objective": "Recall variables",
+        "type": "review",
+        "required": true,
+        "minutes": 30,
+        "resourceIds": [
+          "4a4dc8b7-38fe-448b-a2b5-aa91af3f2cf7"
+        ],
+        "criteria": [
+          "Explain the concept and produce a small working example"
+        ]
+      }
+    ],
+    "resources": [
+      {
+        "resourceId": "4a4dc8b7-38fe-448b-a2b5-aa91af3f2cf7",
+        "sourceType": "documentation",
+        "title": "Python tutorial",
+        "url": "https://docs.python.org/3/tutorial/",
+        "locator": {
+          "section": "An Informal Introduction to Python"
+        },
+        "accessStatus": "public",
+        "role": "primary",
+        "provenance": {
+          "accessed": false,
+          "method": "Illustrative fixture; source not analyzed",
+          "limitations": [
+            "Workload is an example estimate"
+          ],
+          "confidence": 0.5
+        }
+      }
+    ],
+    "milestones": [
+      {
+        "milestoneId": "d26c6183-3a47-4891-a087-4945a1332bf2",
+        "title": "First Python exercise",
+        "taskIds": [
+          "e6fcc9d1-8b89-4db1-a067-d43ea6e749e6",
+          "337b5cdd-0d34-4353-838a-e2232ef1f743"
+        ],
+        "topicIds": [
+          "cc18197c-cd13-4aa4-a188-dde8193e2e93",
+          "c7f34fcd-78e7-4a2f-b5d8-3aa324896f18"
+        ],
+        "criteria": [
+          "Explain a small conditional program"
+        ]
+      }
+    ]
+  },
+  "schedules": [
+    {
+      "scheduleId": "5ff5842a-73ac-4887-8e66-bd8c54e1c46b",
+      "revisionId": "c5e7c007-9c00-4b92-9768-558c222c0b2c",
+      "name": "Three study days",
+      "timezone": "Asia/Colombo",
+      "startDate": "2026-10-12",
+      "length": 3,
+      "durationSemantics": "total",
+      "dayBasis": "study-days",
+      "studyDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "dailyCapacityMinutes": 45,
+      "assignments": [
+        {
+          "assignmentId": "065f1fe7-ae51-4e19-90e1-1be4ccecfd5a",
+          "taskId": "e6fcc9d1-8b89-4db1-a067-d43ea6e749e6",
+          "dayOffset": 0
+        },
+        {
+          "assignmentId": "a506a658-3af2-4b37-a616-9867de167294",
+          "taskId": "337b5cdd-0d34-4353-838a-e2232ef1f743",
+          "dayOffset": 1
+        },
+        {
+          "assignmentId": "10397e1f-4b01-4283-87af-d4d516adbe41",
+          "taskId": "57028900-1cd9-44ed-9fbe-5660a74fcb88",
+          "dayOffset": 2
+        }
+      ],
+      "workloadOverrides": [],
+      "milestonePlacements": [
+        {
+          "milestoneId": "d26c6183-3a47-4891-a087-4945a1332bf2",
+          "date": "2026-10-14"
+        }
+      ]
+    }
+  ],
+  "mappings": []
+}

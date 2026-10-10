@@ -1,0 +1,53 @@
+{
+  "exportedAt": "2026-10-10T00:00:00Z",
+  "state": {
+    "completed": {
+      "python-1": true,
+      "java-2": false,
+      "retired-1": true
+    },
+    "completedAt": {
+      "python-1": "2026-10-09",
+      "retired-1": "2026-10-08"
+    },
+    "activity": {
+      "2026-10-09": 1
+    },
+    "customTasks": [
+      {
+        "id": "personal-1",
+        "title": "Practice",
+        "completed": true,
+        "completedAt": "2026-10-09"
+      }
+    ],
+    "resources": [
+      {
+        "id": "resource-1",
+        "name": "Private book",
+        "url": "https://example.com/book",
+        "x": 18,
+        "y": 36
+      }
+    ],
+    "focus": {
+      "days": {
+        "2026-10-09": 25
+      },
+      "sessions": [
+        {
+          "date": "2026-10-09",
+          "minutes": 25,
+          "note": "Practice notes"
+        }
+      ]
+    },
+    "reviews": {
+      "python-1@3": "2026-10-10"
+    },
+    "profileName": "Demo learner",
+    "unknownExtension": {
+      "retain": true
+    }
+  }
+}
