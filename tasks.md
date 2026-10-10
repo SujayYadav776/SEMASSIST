@@ -5,7 +5,7 @@ Last updated: 2026-10-10 (Asia/Colombo)
 Source: [PRD v1.1](../SEMASSIST-agent-handoff/PRD.md), dated 2026-10-10.
 Status: phases 1/2 authorized on 2026-10-10. Phase 2 is implemented and verified;
 phase 1 is partial with live-service and relocation blockers. A local commit of
-this session's work is authorized; later phases, deployment, and pushes are not.
+this session's work and its push are authorized; later phases and deployment are not.
 
 ## Updating this checklist
 
@@ -179,3 +179,4 @@ Authenticated agent API, direct folder integration, reminders, diagnostic quizze
 | 2026-10-10 | PRD gap analysis and planning | Compared PRD v1.1 with current source; created phased checklist and repository update instruction. No PRD features implemented. | Await implementation direction, then start phase 1 and contract fixtures. |
 | 2026-10-10 | Phases 1/2 foundation checkpoint | Added canonical contract, validator/CLI, fixtures, frozen 76-checkpoint mapping, reversible staging, and reserved application/skill boundaries. Exported/staged local guest backup without changing app data. 191 tests passed; schema/tools typecheck passed; lint 0 errors/1 existing warning. Confirmed URL still fails DNS; no owner credentials available. | Finish blocked live phase-1 checks and coordinate React work; phase 3 needs a separate request. |
 | 2026-10-10 | Local commit checkpoint | User authorized committing session work. Scope includes the demo preview, phase 1/2 foundation, checklist, and agent documentation; unrelated React/continue.md edits and private backups are excluded. Auto-push is disabled for this commit. Existing verification results remain current. | Resolve the recorded phase-1 blockers; no push or later-phase implementation requested. |
+| 2026-10-10 | Push checkpoint | User subsequently authorized pushing. Foundation commit `b499c4b` was successfully pushed to `origin/main`. Unrelated working-tree edits and private backups remain excluded. | Resolve phase-1 blockers; later-phase implementation still needs a request. |

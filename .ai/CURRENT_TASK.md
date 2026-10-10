@@ -15,7 +15,8 @@ passed; lint passed with 0 errors and the existing `vite.config.ts` warning.
 No new dependencies, product UI changes, or cloud writes in the phase 1/2 work.
 The user subsequently authorized a local commit of this session's changes;
 unrelated React/continue.md edits and private backups are excluded, and the
-auto-push hook is disabled for that commit. No push was requested.
+auto-push hook was disabled for that commit. The user subsequently authorized
+pushing, and foundation commit `b499c4b` was pushed to `origin/main` successfully.
 
 Blockers: owner confirmed the configured Supabase URL but DNS still returns
 "DNS name does not exist"; no `.env.local` owner credentials. Live schema/auth/
