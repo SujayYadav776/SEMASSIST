@@ -1487,6 +1487,9 @@ describe("change password", () => {
     );
     expect(byId(doc, "passwordOverlay")!.hasAttribute("hidden")).toBe(true);
     expect((byId(doc, "newPassword") as HTMLInputElement).value).toBe("");
+    // The status/error slot is reset, not left showing "Saving…".
+    expect(text(byId(doc, "passwordError"))).toBe("");
+    expect(byId(doc, "passwordError")!.className).toBe("import-error");
     expect(text(byId(doc, "toast"))).toMatch(/Password updated/);
     // The session survives the change: still on the dashboard.
     expect(byId(doc, "authScreen")!.hasAttribute("hidden")).toBe(true);
@@ -1520,6 +1523,9 @@ describe("change password", () => {
 
     expect(fake.authCalls.some(call => call.method === "updateUser")).toBe(false);
     expect(text(byId(doc, "passwordError"))).toMatch(/must match/);
+    // A real error keeps the default (red) slot; only in-progress copy may
+    // carry the neutral `is-status` colour.
+    expect(byId(doc, "passwordError")!.className).toBe("import-error");
   });
 
   it("advises signing in again when the session has expired", async () => {

@@ -181,10 +181,35 @@ After applying, test the full flow: sign up with a new email → check inbox for
 
 Observed in this project: `POST /auth/v1/signup` returns **500** with the body `{"error_code":"unexpected_failure","msg":"Error sending confirmation email"}`, and `GET /auth/v1/settings` reports `"mailer_autoconfirm": false`. That combination is fatal and has nothing to do with the page: email confirmation is required, but the project cannot send the email, so no account is ever confirmable and sign-in can only answer `invalid_credentials` (or `email_not_confirmed` for a half-created account). The sign-up code path itself is fine.
 
-A project owner fixes it in the dashboard, either way:
+A project owner fixes it either way:
 
-1. **Configure SMTP** — Authentication → **Emails** → SMTP Settings (host, port, user, password, sender). Keeps the confirmation step.
+1. **Configure custom SMTP** (recommended — it keeps the confirmation step). See the next subsection.
 2. **Or turn confirmation off** — Authentication → **Sign In / Providers** → Email → disable **Confirm email**. `signUp` then returns a session immediately and the dashboard signs the user in with it, so no mail is needed at all. After the change, `GET /auth/v1/settings` should report `"mailer_autoconfirm": true`.
+
+#### Configure custom SMTP through a transactional email provider
+
+Custom SMTP is how Supabase Auth delivers its own mail: the provider hands you an SMTP host, port, username and password, and Supabase sends through it. **Resend** is the pick here — Supabase's own guide lists it first, it publishes a first-party Supabase walkthrough, and its free tier covers a study dashboard. Anything that speaks SMTP also works (Postmark, SendGrid, Brevo, Mailjet, AWS SES …) through the `--provider generic` path.
+
+Resend exposes one fixed server (`smtp.resend.com`, username `resend`, port 465 = implicit SSL/TLS), so the only secret is the API key — and that key *is* the SMTP password.
+
+Prerequisites, in order:
+
+1. **Verify a sending domain** at https://resend.com/domains (add the DKIM/SPF DNS records it shows). Without a verified domain Resend only allows `onboarding@resend.dev` as the From address and only delivers to the account owner's own inbox, which is useless for real sign-ups.
+2. **Create an API key** at https://resend.com/api-keys.
+3. **Create a Supabase Management API token** at https://supabase.com/dashboard/account/tokens.
+4. Put the values in `.env.local` (see `.env.example`) and apply them:
+
+```bash
+npm run smtp:configure -- --provider resend            # dry run: prints the change
+npm run smtp:configure -- --provider resend --apply    # writes it
+```
+
+`scripts/configure-auth-smtp.mjs` performs the Management API call Supabase documents (`PATCH /v1/projects/<ref>/config/auth`), then reads the config back and prints it so you can see it took. It is a dry run unless `--apply` is passed, it redacts the password from everything it logs, and it deliberately does **not** send `mailer_autoconfirm`, so it can never silently change your confirmation policy. The same thing by hand: **Authentication → Emails → SMTP Settings**, then Sender email, Sender name, and the host/port/user/password.
+
+Two things that surprise people afterwards:
+
+- A project on custom SMTP is throttled to **30 messages/hour** until you raise it in **Authentication → Rate Limits**.
+- Supabase's built-in mailer only ever delivered to project-team addresses, so accounts created while it was broken may sit unconfirmed. Those users need the confirmation email resent before they can sign in — the sign-in form's **Resend confirmation email** button is exactly that retry.
 
 Diagnose any future auth failure the same way, without the UI:
 

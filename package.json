@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "format": "prettier --write .",
-    "hooks:install": "sh scripts/install-autopush-hook.sh"
+    "hooks:install": "sh scripts/install-autopush-hook.sh",
+    "smtp:configure": "node scripts/configure-auth-smtp.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

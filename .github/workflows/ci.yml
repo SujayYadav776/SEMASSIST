@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Every commit auto-pushes to main (the post-commit hook in scripts/), so a
+# newer push supersedes an in-flight run instead of queueing behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Test and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # The pnpm version comes from the `packageManager` field in package.json
+      # (pnpm@10.4.1), so CI and local development stay on the same version.
+      # Pinned to v5 on purpose: v6 rewrote the installer and now always
+      # installs pnpm 11, which does not accept this repo's pnpm 10 lockfile.
+      - uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      # `pnpm check` (tsc --noEmit) is deliberately not wired in yet: it
+      # currently fails on in-progress work in client/src, unrelated to the
+      # suite above.

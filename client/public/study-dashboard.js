@@ -2549,9 +2549,13 @@ async function saveNewPassword(sb) {
 // Change password: the signed-in counterpart to the recovery link. The open
 // session is enough to rotate the password, so there is no email round trip —
 // which also means this works while the project's mailer is down.
-function setPasswordError(message) {
+// `status` marks in-progress copy ("Saving…"), which must not wear the error
+// colour: the shared `.import-error` slot is red by default.
+function setPasswordError(message, status) {
   const error = document.getElementById("passwordError");
-  if (error) error.textContent = message || "";
+  if (!error) return;
+  error.textContent = message || "";
+  error.classList.toggle("is-status", Boolean(status));
 }
 function openPasswordDialog() {
   const overlay = document.getElementById("passwordOverlay");
@@ -2599,7 +2603,7 @@ async function saveChangedPassword() {
     );
     return;
   }
-  setPasswordError("Saving…");
+  setPasswordError("Saving…", true);
   const { error } = await sb.auth.updateUser({ password });
   if (error) {
     // authErrorMessage() words the expired-session case for a recovery link
