@@ -197,12 +197,15 @@ Prerequisites, in order:
 1. **Verify a sending domain** at https://resend.com/domains (add the DKIM/SPF DNS records it shows). Without a verified domain Resend only allows `onboarding@resend.dev` as the From address and only delivers to the account owner's own inbox, which is useless for real sign-ups.
 2. **Create an API key** at https://resend.com/api-keys.
 3. **Create a Supabase Management API token** at https://supabase.com/dashboard/account/tokens.
-4. Put the values in `.env.local` (see `.env.example`) and apply them:
+4. Put the values in `.env.local` (git-ignored; `cp .env.example .env.local`) and apply them:
 
 ```bash
+cp .env.example .env.local                              # then fill in the blanks
 npm run smtp:configure -- --provider resend            # dry run: prints the change
 npm run smtp:configure -- --provider resend --apply    # writes it
 ```
+
+`npm run smtp:configure` loads `.env.local` itself, so the secrets never land in your shell history or in a command you paste somewhere. It also needs no `.env.local` at all if you would rather export the variables inline.
 
 `scripts/configure-auth-smtp.mjs` performs the Management API call Supabase documents (`PATCH /v1/projects/<ref>/config/auth`), then reads the config back and prints it so you can see it took. It is a dry run unless `--apply` is passed, it redacts the password from everything it logs, and it deliberately does **not** send `mailer_autoconfirm`, so it can never silently change your confirmation policy. The same thing by hand: **Authentication → Emails → SMTP Settings**, then Sender email, Sender name, and the host/port/user/password.
 

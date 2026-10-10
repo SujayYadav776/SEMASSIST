@@ -34,7 +34,9 @@
  *
  * Get a Management API token at https://supabase.com/dashboard/account/tokens.
  * Never commit it — put these in .env.local (git-ignored) and read them from
- * the environment.
+ * the environment. `npm run smtp:configure` passes --env-file-if-exists, so the
+ * npm path picks .env.local up automatically; the raw `node scripts/...` form
+ * above expects the variables to already be exported.
  */
 
 import process from "node:process";
