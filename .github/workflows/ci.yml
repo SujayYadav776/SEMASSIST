@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Test and lint
+    name: Release verification
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -41,6 +41,28 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Product types
+        run: pnpm check:release
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Authenticated function types
+        run: deno check --config supabase/functions/deno.json supabase/functions/roadmap-import/index.ts supabase/functions/roadmap-mutate/index.ts supabase/functions/roadmap-account/index.ts
+
+      - name: Production build
+        run: pnpm build
+
+      - name: Hosting routes and security headers
+        run: node scripts/check-hosting.mjs
+
+      - name: Independent skill and examples
+        run: |
+          pnpm skill:build
+          node dist/skills/semassist/scripts/validate.mjs dist/skills/semassist/examples/beginner-python.json
+          node dist/skills/semassist/scripts/validate.mjs dist/skills/semassist/examples/replanned-python.json
 
       # `pnpm check` (tsc --noEmit) is deliberately not wired in yet: it
       # currently fails on in-progress work in client/src, unrelated to the

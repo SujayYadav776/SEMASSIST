@@ -1,34 +1,93 @@
 # Current task
 
-## Active checkpoint — PRD phases 1/2 (2026-10-10)
+## Active checkpoint — full theme consistency (2026-10-13)
 
-User authorized starting phases 1 and 2 in `tasks.md`. Phase 2 is implemented:
-shared Zod contract v1.0.0, derived JSON Schema, semantic validation, separate
-learner-record schemas, CLI tools, examples, and contract/migration tests.
-Phase 1 is partial: DEC-014 records staged architecture adoption, 76 legacy IDs
-are frozen to UUIDs, and migration staging retains original backup bytes and
-unknown history without applying writes. The local guest preview was exported
-and staged privately in `.freebuff/semassist-migration/`; cloud inventory is not done.
+The user asked to remove the remaining yellow components and match the new
+paper/charcoal home design. Legacy detail cards, profile/leaderboard, forms,
+dialogs and resource canvas now use workspace tokens. Roadmaps library and all
+study views use the same palette; the shared theme script loads in its iframe so
+the parent light/dark choice carries through. Profile SVG export, semester print
+report and 404 page are aligned. Muted track colors replace bright yellow while
+retaining track distinction. No data or account behavior changed. Browser checked
+profile control spacing, Roadmaps library/study in light and dark, SVG share card,
+print report and 404. One default-color unit assertion was updated. The full run
+passed 235/236 before that fix; the focused 61/61 unit tests then passed. Build
+and lint pass after final edits (one existing lint warning). Next: carry out the
+user's earlier push request while excluding unrelated client/src and continue.md.
 
-Validation: 191 tests passed across 5 files; standalone schema/tools typecheck
-passed; lint passed with 0 errors and the existing `vite.config.ts` warning.
-No new dependencies, product UI changes, or cloud writes in the phase 1/2 work.
-The user subsequently authorized a local commit of this session's changes;
-unrelated React/continue.md edits and private backups are excluded, and the
-auto-push hook was disabled for that commit. The user subsequently authorized
-pushing, and foundation commit `b499c4b` was pushed to `origin/main` successfully.
+## Active checkpoint — home dashboard redesign (2026-10-12)
 
-Blockers: owner confirmed the configured Supabase URL but DNS still returns
-"DNS name does not exist"; no `.env.local` owner credentials. Live schema/auth/
-email-template/redirect checks and two-account verification remain undone.
-Unrelated `client/src` edits remain untouched; actual relocation/workspace wiring
-is deferred until that work is coordinated. `apps/web` is a reserved directory,
-not a replacement application. Dashboard imports do not use the new contract yet.
+Heading-font checkpoint (2026-10-12): user selected Space Grotesk instead of
+F1 Torque. Headings and the wordmark now use local Space Grotesk in the static
+dashboard and embedded Roadmaps app. DM Sans body/navigation and 1.2× sizing
+remain. Font file/OFL license live in client/public/fonts; the dashboard preloads
+the heading font and Roadmaps CSS references that same public asset. No new
+dependency or data/JS changes. Browser confirms Space Grotesk loaded/computed
+on home/track/detail/library headings, DM Sans body/nav and no 360px/default
+page overflow. 236 tests, final build and lint pass (one existing warning).
+Evidence: .freebuff/home-space-grotesk.png. No commit, push or deployment.
 
-Next: resolve project availability/owner access for phase 1; coordinate React
-edits before moving files. Phase 3 implementation needs a separate user request.
-Read `tasks.md` and `docs/ROADMAP_CONTRACT.md` for the current checklist/semantics.
+User supplied the ATHENAEUM reference and authorized a full visual overhaul,
+starting with home. This supersedes the earlier yellow-theme constraint for home.
+The static HTML now has a charcoal sidebar, compact toolbar, paper overview,
+learning-track gallery, real checkpoint queue/focus log/history/resource shelf,
+and selectable study inspector. Data and auth flows are unchanged; old anchors
+and controls remain. Styling is in client/public/workspace.css with a locally
+licensed DM Sans font and Lucide sprite; no new runtime dependency.
+renderHomeWorkspace projects existing legacy study data (not imported Roadmap
+learner data), with no new storage. The embedded Roadmaps app stays functional.
 
+Latest readability correction (2026-10-12): user found the 2× version too large
+and requested 1.2× the original size. DM Sans is retained. HTML/workspace text
+sizes were reduced to 60% of the 2× sizes, exactly 1.2× the original; the large
+layout overrides were removed and compact columns/controls restored. Queue and
+entry wrapping and hidden guest sign-out chrome remain. Local DM Sans/font license
+are unchanged. Browser confirms 14.4px nav, 13.2px labels and no default/360px page
+overflow or overflowing phone summary cells; 1170px inspector layout also fits.
+All 236/236 tests, build and lint pass (one existing warning). New evidence:
+.freebuff/home-120.png. No data/JS behavior changes, commit or deployment.
+
+Browser checks: 1170px/1400px desktop and 390px/360px phones, no page overflow,
+track selection/opening, task-form focus, profile/share/pulse access and both
+themes. All 236/236 tests in 10 files pass; final build and lint pass (one existing
+warning). Initial CLI timeout passed with lower concurrency; a test-only jsdom
+scroll mock was corrected. Evidence: .freebuff/home-redesign.png. Next checkpoint
+is matching Roadmaps study screens. The temporary viewport was reset; local
+preview is open at http://localhost:3000/study-dashboard.html?demo=1#overview.
+No commit, push or deployment. Previous cloud/SMTP/accessibility gates remain open.
+
+## Active checkpoint — remaining PRD phases 7/8 (2026-10-11)
+
+User authorized completing the remaining work. Local phases are implemented:
+versioned account Roadmaps backups, separate validated merge/replace restore,
+pre-restore downloads/private server receipts, authoritative stale-preview CAS,
+explicit mapping decisions, removed-task history, all saved schedules and atomic
+activation. Snapshots exclude private notes/evidence by default and include the
+baseline, mastery, target duration/minutes/date/timezone/weekdays. Duplication
+restarts required coverage through a visible preview with explicit warnings.
+The original yellow static dashboard remains, with its own legacy export/import.
+
+The independent skill is built at dist/skills/semassist, with bundled canonical
+validator/schema/examples/licenses/workflow docs; dist/semassist-skill.zip is the
+shareable distribution. Release CI adds product/server/schema types, actual
+PostgreSQL/RLS/transaction tests, build/hosting, Deno function types and skill checks.
+Root check still reports unrelated client/src work, which was not edited.
+
+Verification: full 234/234 tests (10 files), then focused library 4/4 after target
+controls; product types pass, lint 0 errors/1 existing warning, production build
+and HTTP routes/security/404 pass, all three Edge function types pass, independent
+skill/examples validate. Browser preserved yellow styling, exported a notes-free
+snapshot success state, and showed no phone-form horizontal overflow. Browser
+export-event capture stalled; jsdom validates actual library download/restore
+controls. Full WCAG assistive-technology and live auth/device flows remain open.
+
+No production deployment, commit or push. DNS lookup returned addresses on
+2026-10-11, but HTTPS auth health still failed to resolve; service availability
+is unverified. No Supabase Management or Vercel deployment login/owner SMTP keys
+were found. Apply all three migrations and deploy roadmap-import, roadmap-mutate
+and roadmap-account together when owner access/connectivity are available, then
+verify the five live PRD flows and full accessibility. See tasks.md and
+ docs/BACKUP_REPLAN.md. Unrelated client/src and continue.md edits remain untouched.
 ## Earlier checkpoints and SMTP handoff (historical)
 
 **Latest planning checkpoint (2026-10-10):** Read PRD v1.1, compared it against source,
@@ -108,3 +167,17 @@ run the dry run and `--apply` and read the config back.
 **Live preview check (2026-10-10):** Started Vite at http://localhost:3000/ and tested signup and sign-in through the real preview form using the owner-supplied demo email. Both showed "Failed to fetch"; account creation and a successful session could not be confirmed. An unsandboxed Resolve-DnsName check for the configured Supabase host returned "DNS name does not exist". Before retrying email delivery, the owner needs to verify the Supabase project's availability and current project URL; SMTP credentials alone will not resolve this connection failure.
 
 **Local dashboard preview (2026-10-10):** Added `?demo=1` on localhost/loopback origins to open the guest dashboard directly and skip Supabase initialization. The preview is open at http://localhost:3000/study-dashboard.html?demo=1. Guest progress uses existing local storage; account controls stay hidden, and deployed origins still require authentication. The live Supabase DNS blocker remains unresolved.
+
+## Roadmaps layout repair — 2026-10-10
+
+Fixed embedded root/body transparency, restored Import JSON and sample actions,
+matched compact yellow/cream dashboard controls and cards, and removed the fixed
+520px blank region. ResizeObserver now measures the content root so the iframe
+can grow and shrink without measuring its own viewport. Embedded content no
+longer enforces a 320px minimum inside narrow dashboard cards. Added a trusted
+resize/shrink regression test. Verified empty library, Python import preview,
+and existing archived card in browser; narrow content width equals scroll width.
+Full suite: 194/194; lint: 0 errors/1 existing warning; production build passed.
+Tests/build used a temporary process-only realpath compatibility shim for sandbox
+EPERM. No cloud writes, commit, or push. Next: live cloud deployment/isolation
+checks remain blocked as recorded above.

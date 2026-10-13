@@ -2,7 +2,7 @@ import {
   DEFAULT_MAX_BYTES,
   packageSchema,
   type RoadmapPackage,
-} from "./schema";
+} from "./schema.ts";
 
 export interface ValidationIssue {
   path: string;

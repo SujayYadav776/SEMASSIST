@@ -9,6 +9,46 @@ import {
 } from "./helpers";
 
 describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
+  it("selects a home track without changing progress and opens its real checkpoints", async () => {
+    const { doc } = await bootApp({ url: "http://localhost:3000/study-dashboard.html?demo=1" });
+    expect(doc.querySelectorAll(".learning-card")).toHaveLength(4);
+    expect(text(byId(doc, "homeEntries"))).toContain("Your study record starts here");
+    byId(doc, "java")!.scrollIntoView = vi.fn();
+    byId(doc, "custom")!.scrollIntoView = vi.fn();
+    const before = stored(doc);
+    doc.querySelector<HTMLButtonElement>('[data-inspect-track="java"]')!.click();
+    expect(doc.querySelector('#homeInspector h3')!.textContent).toBe("Java");
+    expect(doc.querySelector('[data-inspect-track="java"]')!.getAttribute("aria-pressed")).toBe("true");
+    doc.querySelector<HTMLButtonElement>('[data-open-track="java"]')!.click();
+    expect(byId(doc, "java")!.getAttribute("aria-expanded")).toBe("true");
+    expect(byId(doc, "java")!.scrollIntoView).toHaveBeenCalled();
+    expect(stored(doc)).toEqual(before);
+    doc.querySelector<HTMLButtonElement>('[data-home-action="newTask"]')!.click();
+    expect(doc.activeElement).toBe(byId(doc, "customTaskInput"));
+  });
+
+  it("updates the home record from real completions and safely displays private study text", async () => {
+    const { app, doc } = await bootApp({
+      url: "http://localhost:3000/study-dashboard.html?demo=1",
+      preSeed: { [STORAGE_KEY]: JSON.stringify({
+        completed: {}, completedAt: {}, activity: {},
+        focus: { days: {}, sessions: [{ date: "2026-10-10", minutes: 15, note: '<img src=x onerror="alert(1)">' }] },
+        resources: [{ id: "safe", name: "<Study notes>", url: "https://example.com/course", description: "My reference" }, { id: "unsafe", name: "Bad link", url: "javascript:alert(1)" }],
+      }) },
+    });
+    expect(byId(doc, "homeDailyNote")!.textContent).toContain('<img src=x');
+    expect(byId(doc, "homeEntries")!.querySelector("img")).toBeNull();
+    expect(byId(doc, "homeResources")!.querySelectorAll("a")).toHaveLength(1);
+    expect(byId(doc, "homeResources")!.textContent).toContain("<Study notes>");
+    doc.querySelector<HTMLInputElement>('.task-row[data-task-id="python-1"] .check')!.click();
+    expect(text(byId(doc, "sidebarCheckpoints"))).toBe("1 / 76");
+    expect(text(byId(doc, "homeToday"))).toBe("1");
+    expect(text(byId(doc, "homeEntries"))).toContain("Python: Learn the basics");
+    expect(byId(doc, "workspaceDate")!.getAttribute("datetime")).toBe(app.todayKey());
+    doc.querySelector<HTMLInputElement>('.task-row[data-task-id="python-1"] .check')!.click();
+    expect(text(byId(doc, "homeEntries"))).not.toContain("Python: Learn the basics");
+  });
+
   it("opens a local demo without initializing Supabase or exposing account controls", async () => {
     const factory = vi.fn();
     const { doc } = await bootApp({
@@ -19,6 +59,8 @@ describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
     expect(byId(doc, "authScreen")!.hidden).toBe(true);
     expect(byId(doc, "profileSecurity")!.hidden).toBe(true);
     expect(byId(doc, "signOutTopbar")!.classList.contains("visible")).toBe(false);
+    expect(doc.querySelector('.nav-button[data-scroll="roadmaps"]')).not.toBeNull();
+    expect((byId(doc, "roadmapsFrame") as HTMLIFrameElement).src).toContain("roadmaps.html?embedded=1&demo=1");
     expect(factory).not.toHaveBeenCalled();
     doc.querySelector<HTMLInputElement>('.task-row[data-task-id="python-1"] .check')!.click();
     expect((stored(doc)!.completed as Record<string, boolean>)["python-1"]).toBe(true);
@@ -27,6 +69,34 @@ describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
   it("keeps authentication visible for demo URLs on deployed origins", async () => {
     const { doc } = await bootApp({ url: "https://semassist.runs-on.dev/study-dashboard.html?demo=1" });
     expect(byId(doc, "authScreen")!.hidden).toBe(false);
+  });
+  it("preserves study direct links and accepts routes only from the roadmap frame", async () => {
+    const id = "a754c0d1-6e9d-406d-9645-85eeea40f2e5";
+    const { doc } = await bootApp({ url: `http://localhost:3000/study-dashboard.html?demo=1&roadmap=${id}&view=schedule` });
+    const frame = byId(doc, "roadmapsFrame") as HTMLIFrameElement;
+    expect(frame.src).toContain(`roadmap=${id}&view=schedule`);
+    const win = doc.defaultView!;
+    const send = (source: Window | null, roadmap = id, view = "progress") => win.dispatchEvent(new win.MessageEvent("message", { origin:win.location.origin,source,data:{type:"semassist-roadmaps-route",roadmap,view,task:""} }));
+    send(null); expect(win.location.search).toContain("view=schedule");
+    send(frame.contentWindow); expect(win.location.search).toContain("view=progress");
+    send(frame.contentWindow,id,"unknown"); expect(win.location.search).toContain("view=progress");
+    send(frame.contentWindow,"",""); expect(win.location.search).not.toContain("roadmap=");
+  });
+
+  it("fits the roadmap frame to trusted content heights and lets it shrink", async () => {
+    const { doc } = await bootApp({ url: "http://localhost:3000/study-dashboard.html?demo=1" });
+    const frame = byId(doc, "roadmapsFrame") as HTMLIFrameElement;
+    const win = doc.defaultView!;
+    const resize = (height: number, origin = win.location.origin, source = frame.contentWindow) =>
+      win.dispatchEvent(new win.MessageEvent("message", { origin, source, data: { type: "semassist-roadmaps-height", height } }));
+    resize(810);
+    expect(frame.style.height).toBe("810px");
+    resize(320);
+    expect(frame.style.height).toBe("320px");
+    resize(999, "https://other.example");
+    resize(999, win.location.origin, null);
+    resize(NaN);
+    expect(frame.style.height).toBe("320px");
   });
 
   it("renders all track cards on boot without a session", async () => {
@@ -1096,6 +1166,20 @@ const submitAuth = (
 };
 
 describe("sign in and sign up", () => {
+  it("checks roadmap recovery before allowing dashboard sign-out",async()=>{
+    const fake=makeFakeSupabase({auth:{session:AUTH_SESSION}});
+    const {doc}=await bootSignedIn(fake);
+    const button=byId(doc,"signOutTopbar")!;
+    const frame=byId(doc,"roadmapsFrame") as HTMLIFrameElement;
+    button.click(); await lbSleep(30);
+    expect(fake.authCalls.some(c=>c.method==="signOut")).toBe(false);
+    (frame.contentWindow as any).semassistPrepareSignOut=async()=>false;
+    button.click(); await lbSleep(30);
+    expect(fake.authCalls.some(c=>c.method==="signOut")).toBe(false);
+    (frame.contentWindow as any).semassistPrepareSignOut=async()=>true;
+    button.click(); await lbSleep(100);
+    expect(fake.authCalls.some(c=>c.method==="signOut")).toBe(true);
+  });
   it("signs in with the entered credentials and applies the returned session", async () => {
     const fake = makeFakeSupabase({
       auth: { session: null, signInSession: AUTH_SESSION },

@@ -2,12 +2,14 @@
 
 ## 1. System overview
 
-PRD foundation added on 2026-10-10: `packages/roadmap-schema` contains the shared
-v1.0.0 contract, derived JSON Schema, semantic validator, and reversible legacy
-migration staging. Root `roadmap:validate`, `roadmap:check`, and `roadmap:migrate`
-scripts expose these tools. They are not wired into dashboard imports or cloud
-persistence yet. `apps/web` and `skills/semassist` document future boundaries;
-the working product and build paths below remain current (DEC-014/015).
+PRD phases 2–7 and local phase-8 tooling are implemented. `packages/roadmap-schema`
+owns the v1.0.0 agent contract, separate backup/learner contracts, validators and
+reversible legacy staging. `client/roadmaps` is a React feature embedded in the
+static dashboard; imports/mutations/account operations go through
+three authenticated Edge Functions and three ordered SQL migrations. Cloud
+deployment/live verification remain open. `apps/web` is a documented boundary;
+`skills/semassist` builds an independent distribution. See DEC-014–018 and the
+backup/replan boundary below for current code paths.
 
 SEM ASSIST ships as a **static, framework-free dashboard page plus a thin hosting
 shell**. The entire product lives in two files under `client/public/`:
@@ -52,6 +54,13 @@ flowchart TD
 ```
 
 ## 3. Frontend
+
+Home visual boundary (2026-10-12): study-dashboard.html loads workspace.css after
+its legacy styles. Home and the outer navigation use a paper/charcoal layout;
+renderHomeWorkspace is a read-only projection of the existing legacy study state.
+It does not merge/import Roadmaps learner records. The embedded React Roadmaps
+feature retains its current layout while subsequent redesign checkpoints proceed.
+The home font and icon sprite are local assets with their licenses.
 
 - **Routing:** no client router on the product page. `client/index.html` (meta
   refresh) and `client/src/pages/Home.tsx` (wouter route `/`) both redirect to
@@ -211,3 +220,23 @@ toast and the leaderboard stays empty.
 - **Not verified in this environment:** the live Supabase project host
   (`nrxbelpmydquivcphxry.supabase.co`) did not resolve for `curl`/`node fetch` during
   the last session, so live auth settings could not be re-read.
+
+## Roadmaps study boundary (2026-10-11)
+
+The original dashboard embeds the separate client/roadmaps Vite entry. Its six
+study views use study-model for progress/dates/graph and StudySync for serialized
+account/roadmap IndexedDB snapshots and ordered optimistic outboxes. A browser
+Web Lock limits each roadmap to one editing workspace. Parent/child routes are
+same-origin messages; dashboard signout awaits the child's recovery/cache guard.
+Imported definitions remain independent from learner completion, notes, time,
+mastery, milestone evidence and schedule-specific assignment date overrides.
+
+roadmap-mutate authenticates a bearer session and validates the shared learner
+schema before calling a service-only SQL transaction. Authoritative revisions,
+field-level baseline comparisons and owner/mutation receipts protect concurrent
+edits and duplicate delivery. Conflicts preserve both versions until resolution.
+There is no offline shell; previously opened data works while the app is loaded.
+SQL/Edge live execution remains unverified until project DNS/access is restored.
+
+## Backup/replan and independent skill boundary (2026-10-11)
+Roadmaps backup.ts owns a separate versioned restore contract and shared baseline/mapping guards. roadmap-account authenticates and validates backup/restore/manage calls; the third migration serializes account operations, preserves recovery receipts, and enforces transactional restore and stale activation. Demo data migrates lazily into one atomic localStorage account envelope, retaining legacy demo keys for recovery. All saved schedules and historical learner records remain available in backups. scripts/build-skill.ts produces dist/skills/semassist with bundled canonical validator/schema/examples. check:release covers Roadmaps/schema/tools/server; CI also builds, checks hosting, and type-checks Edge functions. Original static dashboard/React shell boundaries are unchanged.

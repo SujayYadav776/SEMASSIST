@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "target": "ES2022", "incremental": false, "resolveJsonModule": true },
+  "include": ["./**/*.ts", "./**/*.tsx", "../../packages/roadmap-schema/src/**/*.ts"],
+  "exclude": ["../../node_modules"]
+}

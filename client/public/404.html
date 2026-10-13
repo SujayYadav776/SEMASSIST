@@ -3,19 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#a9afba" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#23221f" />
+    <meta name="theme-color" content="#e8e2d2" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#252820" />
     <meta name="description" content="Page not found — SEM ASSIST study dashboard" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://esm.sh https://nrxbelpmydquivcphxry.supabase.co wss://nrxbelpmydquivcphxry.supabase.co ws://localhost:* ws://127.0.0.1:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <!-- Theme init must run before first paint to avoid a theme flash. Shared
          with the dashboard (one localStorage key); CSP-safe: same-origin file,
          no inline script. -->
     <script src="./theme.js"></script>
     <title>404 — SEM ASSIST</title>
     <style>
+      @font-face { font-family: "DM Sans"; src: url("./fonts/dm-sans.ttf") format("truetype"); font-weight: 100 1000; font-display: swap; }
+      @font-face { font-family: "Space Grotesk"; src: url("./fonts/space-grotesk.ttf") format("truetype"); font-weight: 300 700; font-display: swap; }
       /* Matches the dashboard's design language: pearl-gray canvas, cream card,
          charcoal ink, warm yellow accents, rounded corners, Manrope/DM Sans. */
       :root {
@@ -217,6 +216,18 @@
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
       }
+      :root { --canvas:#e8e2d2; --paper:#e8e2d2; --card:#ece6d8; --ink:#282a24; --muted:#666659; --line:#b8b29f; --yellow:#252820; --yellow-soft:#e1e5d4; --charcoal:#252820; --soft-shadow:none; }
+      :root[data-theme="dark"] { --canvas:#252820; --paper:#252820; --card:#2c3027; --ink:#e7e4d8; --muted:#b9beac; --line:#616754; --yellow:#e7e4d8; --yellow-soft:#343d2d; }
+      body, :root[data-theme="dark"] body { background:var(--paper); }
+      .card, :root[data-theme="dark"] .card { border:1px solid var(--line); border-radius:4px; background:var(--card); box-shadow:none; }
+      .brand, .code, h1 { font-family:"Space Grotesk", "DM Sans", sans-serif; }
+      .code small { font-family:"DM Sans",sans-serif; }
+      .brand-mark { color:#252820; background:#d4dac1; border-radius:3px; font-family:"Space Grotesk",sans-serif; }
+      .back-button { color:#f1eee2; background:#252820; border:1px solid var(--line); border-radius:3px; font-family:"DM Sans",sans-serif; box-shadow:none; }
+      :root[data-theme="dark"] .back-button { color:#252820; background:#e7e4d8; box-shadow:none; }
+      .back-button:hover, :root[data-theme="dark"] .back-button:hover { transform:none; box-shadow:none; }
+      .theme-toggle, :root[data-theme="dark"] .theme-toggle { color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:3px; box-shadow:none; }
+      .theme-toggle:hover, :root[data-theme="dark"] .theme-toggle:hover { transform:none; background:var(--yellow-soft); }
     </style>
   </head>
   <body>

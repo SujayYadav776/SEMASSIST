@@ -613,12 +613,12 @@ describe("safeColor", () => {
   });
 
   it("falls back to the default for anything else", () => {
-    expect(safeColor("red")).toBe("#f6ce50");
-    expect(safeColor("red;background:url(https://evil.example/)")).toBe("#f6ce50");
-    expect(safeColor("#12345")).toBe("#f6ce50");
-    expect(safeColor("#1234567")).toBe("#f6ce50");
-    expect(safeColor(null as never)).toBe("#f6ce50");
-    expect(safeColor("")).toBe("#f6ce50");
+    expect(safeColor("red")).toBe("#87926e");
+    expect(safeColor("red;background:url(https://evil.example/)")).toBe("#87926e");
+    expect(safeColor("#12345")).toBe("#87926e");
+    expect(safeColor("#1234567")).toBe("#87926e");
+    expect(safeColor(null as never)).toBe("#87926e");
+    expect(safeColor("")).toBe("#87926e");
   });
 });
 

@@ -101,3 +101,7 @@ The local guest preview was exported before any migration. Cloud data inventory,
 RLS, email templates, redirect settings, and two real accounts remain unverified:
 the owner-confirmed project URL has a DNS failure, and no `.env.local` owner
 credentials exist in this checkout. No cloud configuration was changed.
+
+## Backup and replanning contract
+
+The separate semassist-backup version-1 schema and semantic validator live in packages/roadmap-schema/src/backup.ts. They validate definitions/history/schedules and dashboard-owned learner records, without adding those records to agent packages. Replanning snapshots exclude private notes/evidence by default and pin active revision/schedule IDs plus authoritative learnerRevision. See docs/BACKUP_REPLAN.md for merge/replace, explicit mappings, transaction/CAS guarantees, and deployment.

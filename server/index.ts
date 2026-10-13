@@ -18,13 +18,13 @@ const CONTENT_SECURITY_POLICY = [
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
-  "frame-ancestors 'none'",
+  "frame-ancestors 'self'",
 ].join("; ");
 
 function securityHeaders(_req: express.Request, res: express.Response, next: express.NextFunction) {
   res.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader(
     "Permissions-Policy",
@@ -52,6 +52,7 @@ async function startServer() {
       : path.resolve(__dirname, "..", "dist", "public");
 
   app.use(express.static(staticPath));
+  app.get("/roadmaps", (_req, res) => res.sendFile(path.join(staticPath, "roadmaps.html")));
 
   // Unknown paths get a real 404 page (Vercel serves dist/public/404.html the
   // same way), instead of silently returning index.html for everything.

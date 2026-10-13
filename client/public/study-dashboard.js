@@ -20,7 +20,7 @@ const tracks = [
   {
     id: "python",
     name: "Python",
-    color: "#f2ca54",
+    color: "#87926e",
     source: "https://roadmap.sh/python",
     subtitle: "Foundation, tooling, quality, and concurrency",
     tasks: [
@@ -77,7 +77,7 @@ const tracks = [
   {
     id: "python30",
     name: "30 Days of Python",
-    color: "#e6a85d",
+    color: "#a59b7a",
     source: "https://github.com/Asabeneh/30-Days-Of-Python",
     sourceLabel: "GitHub ↗",
     subtitle: "Asabeneh's hands-on 30-day Python challenge",
@@ -165,7 +165,7 @@ const tracks = [
   {
     id: "java",
     name: "Java",
-    color: "#e89d72",
+    color: "#a6816b",
     source: "https://roadmap.sh/java",
     subtitle: "Language, OOP, collections, I/O, concurrency, testing",
     tasks: [
@@ -222,7 +222,7 @@ const tracks = [
   {
     id: "os",
     name: "OS / Linux",
-    color: "#a9ca6c",
+    color: "#708b7a",
     source: "",
     subtitle: "Processes, threads, memory, files, IPC, observability",
     tasks: [
@@ -263,7 +263,7 @@ const tracks = [
   {
     id: "algorithms",
     name: "Algorithms",
-    color: "#8ba7d9",
+    color: "#7e8997",
     source: "",
     subtitle: "Repeated practice in both primary languages",
     tasks: [
@@ -296,7 +296,7 @@ const tracks = [
   {
     id: "campusops",
     name: "CampusOps",
-    color: "#c5a6dc",
+    color: "#958c96",
     source: "",
     subtitle: "Flagship project evidence",
     tasks: [
@@ -380,6 +380,7 @@ let keyboardCursorId = null;
 let journalMinutes = 0;
 let currentState = null;
 let currentUser = null;
+let inspectedTrackId = "python";
 let saveTimer = null;
 let currentAccessToken = null;
 let stateDirty = false;
@@ -577,6 +578,12 @@ function updateSyncPill() {
   } else {
     text.textContent = "Saved locally";
   }
+  const footer = document.getElementById("homeFooter");
+  if (footer) footer.textContent = text.textContent;
+  const mode = document.getElementById("workspaceMode");
+  if (mode) mode.textContent = currentUser ? "Account workspace" : "Local workspace";
+  const storage = document.getElementById("workspaceStorage");
+  if (storage) storage.textContent = text.textContent;
 }
 // Cookie consent banner. The dashboard stores study progress and the sign-in
 // session in localStorage only and sets no tracking cookies, so both buttons
@@ -961,7 +968,7 @@ function renderMissionQueue(state) {
   queue.innerHTML = upcoming
     .map(
       (item, index) =>
-        `<button type="button" class="queue-row" data-qid="${item.id}" data-track="${item.track.id}" style="--qdot:${item.track.color}" title="Verify in ${item.track.name}">` +
+        `<button type="button" class="queue-row" data-qid="${item.id}" data-track="${item.track.id}" style="--qdot:${item.track.color}" title="Verify in ${item.track.name}: ${escapeHtml(item.label)}">` +
         `<i>${index + 1}</i>` +
         `<span class="queue-main"><b>${escapeHtml(item.label)}</b>` +
         `<small><s></s>${escapeHtml(item.track.name)} · ${escapeHtml(item.meta)}</small></span>` +
@@ -1194,19 +1201,19 @@ function buildPulseSvg(series) {
     `<svg viewBox="0 0 ${W} ${H}" role="img" aria-hidden="true">` +
     `<line x1="${x(last)}" y1="${y(you[last])}" x2="${x(last)}" y2="${H - padBottom + 3}" stroke="rgba(255,255,255,.28)" stroke-dasharray="3 3"/>` +
     `<polyline points="${pacePts}" fill="none" stroke="#dfe3ec" stroke-width="1.5" stroke-dasharray="5 4" opacity=".85"/>` +
-    `<polyline points="${youPts}" fill="none" stroke="#f6ce50" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<polyline points="${youPts}" fill="none" stroke="#b9c99a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>` +
     you
       .map(
         (v, i) =>
-          `<circle cx="${x(i)}" cy="${y(v)}" r="2.6" fill="#f6ce50"/>`
+          `<circle cx="${x(i)}" cy="${y(v)}" r="2.6" fill="#b9c99a"/>`
       )
       .join("") +
-    `<rect x="${bubbleX}" y="${y(you[last]) - 25}" width="68" height="18" rx="9" fill="#f6ce50"/>` +
+    `<rect x="${bubbleX}" y="${y(you[last]) - 25}" width="68" height="18" rx="9" fill="#b9c99a"/>` +
     `<text x="${bubbleX + 34}" y="${y(you[last]) - 12}" text-anchor="middle" font-size="9" font-weight="800" fill="#332f1e">${you[last]} pts</text>` +
     labels
       .map((label, i) =>
         i === last
-          ? `<circle cx="${x(i)}" cy="${H - padBottom + 9}" r="9" fill="#f6ce50"/><text x="${x(i)}" y="${H - padBottom + 12.5}" text-anchor="middle" font-size="8" font-weight="800" fill="#332f1e">${label}</text>`
+          ? `<circle cx="${x(i)}" cy="${H - padBottom + 9}" r="9" fill="#b9c99a"/><text x="${x(i)}" y="${H - padBottom + 12.5}" text-anchor="middle" font-size="8" font-weight="800" fill="#252820">${label}</text>`
           : `<text x="${x(i)}" y="${H - padBottom + 12.5}" text-anchor="middle" font-size="8" fill="#a7acb8">${label}</text>`
       )
       .join("") +
@@ -1256,10 +1263,10 @@ function buildProfileCardSvg(state) {
       ? `${Math.floor(focusTotal / 60)}h ${focusTotal % 60}m`
       : `${focusTotal}m`;
   const metrics = [
-    { label: "Checkpoints", value: `${stats.done}/${stats.total}`, fill: "#f6ce50", ink: "#33301f" },
-    { label: "Streak", value: `${streak(state.activity)}`, fill: "#33322e", ink: "#f2f0e8" },
-    { label: "Focus", value: focusLabel, fill: "url(#striped)", ink: "#4a3d12" },
-    { label: "Proof points", value: `${stats.done * 10}`, fill: "#ffffff", ink: "#33302a" },
+    { label: "Checkpoints", value: `${stats.done}/${stats.total}`, fill: "#d4dac1", ink: "#252820" },
+    { label: "Streak", value: `${streak(state.activity)}`, fill: "#252820", ink: "#f1eee2" },
+    { label: "Focus", value: focusLabel, fill: "url(#striped)", ink: "#252820" },
+    { label: "Proof points", value: `${stats.done * 10}`, fill: "#eee9dc", ink: "#252820" },
   ];
   const series = weeklySeries(state);
   const n = series.you.length;
@@ -1302,26 +1309,26 @@ function buildProfileCardSvg(state) {
   });
   const bubbleX = Math.min(Math.max(cx(last) - 55, chartL + 4), chartR - 116);
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Manrope, -apple-system, 'Segoe UI', Arial, sans-serif">` +
-    `<defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6ce50"/><stop offset="1" stop-color="#e89a3c"/></linearGradient>` +
-    `<pattern id="striped" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="18" height="18" fill="#eec13e"/><rect width="9" height="18" fill="#f6ce50"/></pattern></defs>` +
-    `<rect width="${W}" height="${H}" rx="36" fill="#fcfbf6"/>` +
-    `<rect x="70" y="66" width="28" height="28" rx="8" fill="url(#gold)"/>` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Space Grotesk, DM Sans, Arial, sans-serif">` +
+    `<defs><linearGradient id="sage" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d4dac1"/><stop offset="1" stop-color="#87926e"/></linearGradient>` +
+    `<pattern id="striped" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="18" height="18" fill="#a8b58b"/><rect width="9" height="18" fill="#d4dac1"/></pattern></defs>` +
+    `<rect width="${W}" height="${H}" rx="12" fill="#e8e2d2"/>` +
+    `<rect x="70" y="66" width="28" height="28" rx="4" fill="url(#sage)"/>` +
     `<text x="84" y="85" text-anchor="middle" font-size="19" font-weight="800" fill="#26241f">S</text>` +
     `<text x="110" y="85" font-size="20" font-weight="800" letter-spacing="2" fill="#2b2923">SEM ASSIST</text>` +
     `<text x="${W - 70}" y="85" text-anchor="end" font-size="19" font-weight="700" fill="#8b887e">${
       semesterRaw ? `${semester} · ${escapeHtml(monthYear)}` : escapeHtml(monthYear)
     }</text>` +
-    `<circle cx="${W / 2}" cy="250" r="118" fill="url(#gold)"/>` +
+    `<circle cx="${W / 2}" cy="250" r="118" fill="url(#sage)"/>` +
     `<text x="${W / 2}" y="296" text-anchor="middle" font-size="150" font-weight="800" fill="#26241f">${escapeHtml(avatarGlyph)}</text>` +
     `<text x="${W / 2}" y="430" text-anchor="middle" font-size="64" font-weight="800" fill="#2b2923">${escapeHtml(name)}</text>` +
     (semesterRaw
-      ? `<g transform="translate(${(W - semW) / 2}, 500)"><rect width="${semW}" height="46" rx="23" fill="#33322e"/><text x="${semW / 2}" y="31" text-anchor="middle" font-size="24" font-weight="700" fill="#f4f1e6">${semester}</text></g>`
+      ? `<g transform="translate(${(W - semW) / 2}, 500)"><rect width="${semW}" height="46" rx="4" fill="#252820"/><text x="${semW / 2}" y="31" text-anchor="middle" font-size="24" font-weight="700" fill="#f1eee2">${semester}</text></g>`
       : "") +
     badgeRects
       .map(
         (r, i) =>
-          `<g><rect x="${r.x}" y="580" width="${r.w}" height="48" rx="24" fill="#33322e"/><circle cx="${r.x + 30}" cy="604" r="8" fill="${r.color}"/><text x="${r.x + 48}" y="611" font-size="23" font-weight="700" fill="#e9e7de">${escapeHtml(badgeLabels[i].name)}</text></g>`
+          `<g><rect x="${r.x}" y="580" width="${r.w}" height="48" rx="4" fill="#252820"/><circle cx="${r.x + 30}" cy="604" r="8" fill="${r.color}"/><text x="${r.x + 48}" y="611" font-size="23" font-weight="700" fill="#e9e7de">${escapeHtml(badgeLabels[i].name)}</text></g>`
       )
       .join("") +
     bioLines
@@ -1335,25 +1342,25 @@ function buildProfileCardSvg(state) {
         const x = metricX(i);
         return (
           `<g><text x="${x + metricW / 2}" y="780" text-anchor="middle" font-size="19" font-weight="700" letter-spacing="2" fill="#8b887e">${escapeHtml(m.label.toUpperCase())}</text>` +
-          `<rect x="${x}" y="794" width="${metricW}" height="${metricH}" rx="20" fill="${m.fill}" stroke="#e3e1d7"/><text x="${x + metricW / 2}" y="856" text-anchor="middle" font-size="42" font-weight="800" fill="${m.ink}">${escapeHtml(m.value)}</text></g>`
+          `<rect x="${x}" y="794" width="${metricW}" height="${metricH}" rx="4" fill="${m.fill}" stroke="#b8b29f"/><text x="${x + metricW / 2}" y="856" text-anchor="middle" font-size="42" font-weight="800" fill="${m.ink}">${escapeHtml(m.value)}</text></g>`
         );
       })
       .join("") +
-    `<rect x="80" y="960" width="920" height="300" rx="26" fill="#1a1e29"/>` +
+    `<rect x="80" y="960" width="920" height="300" rx="4" fill="#252820"/>` +
     `<text x="110" y="1000" font-size="28" font-weight="800" fill="#f4f1e6">Study pulse</text>` +
-    `<circle cx="950" cy="1000" r="7" fill="#f6ce50"/><text x="934" y="1006" text-anchor="end" font-size="20" font-weight="700" fill="#a7acb8">You</text>` +
+    `<circle cx="950" cy="1000" r="7" fill="#b9c99a"/><text x="934" y="1006" text-anchor="end" font-size="20" font-weight="700" fill="#c0c8b3">You</text>` +
     `<line x1="856" y1="1000" x2="908" y2="1000" stroke="#dfe3ec" stroke-width="3" stroke-dasharray="5 5"/><text x="900" y="1006" text-anchor="end" font-size="20" font-weight="700" fill="#a7acb8">Pace</text>` +
     `<polyline points="${pacePts}" fill="none" stroke="#dfe3ec" stroke-width="3" stroke-dasharray="6 6" opacity=".85"/>` +
-    `<polyline points="${youPts}" fill="none" stroke="#f6ce50" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<polyline points="${youPts}" fill="none" stroke="#b9c99a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>` +
     series.you
-      .map((v, i) => `<circle cx="${cx(i)}" cy="${cy(v)}" r="8" fill="#f6ce50"/>`)
+      .map((v, i) => `<circle cx="${cx(i)}" cy="${cy(v)}" r="8" fill="#b9c99a"/>`)
       .join("") +
     `<line x1="${cx(last)}" y1="${cy(series.you[last])}" x2="${cx(last)}" y2="${chartB + 2}" stroke="rgba(255,255,255,.35)" stroke-width="2" stroke-dasharray="4 4"/>` +
-    `<rect x="${bubbleX}" y="${cy(series.you[last]) - 46}" width="110" height="32" rx="16" fill="#f6ce50"/><text x="${bubbleX + 55}" y="${cy(series.you[last]) - 25}" text-anchor="middle" font-size="20" font-weight="800" fill="#332f1e">${series.you[last]} pts</text>` +
+    `<rect x="${bubbleX}" y="${cy(series.you[last]) - 46}" width="110" height="32" rx="4" fill="#b9c99a"/><text x="${bubbleX + 55}" y="${cy(series.you[last]) - 25}" text-anchor="middle" font-size="20" font-weight="800" fill="#252820">${series.you[last]} pts</text>` +
     series.labels
       .map((label, i) =>
         i === last
-          ? `<circle cx="${cx(i)}" cy="${chartB + 26}" r="15" fill="#f6ce50"/><text x="${cx(i)}" y="${chartB + 32}" text-anchor="middle" font-size="16" font-weight="800" fill="#332f1e">${label}</text>`
+          ? `<circle cx="${cx(i)}" cy="${chartB + 26}" r="15" fill="#b9c99a"/><text x="${cx(i)}" y="${chartB + 32}" text-anchor="middle" font-size="16" font-weight="800" fill="#252820">${label}</text>`
           : `<text x="${cx(i)}" y="${chartB + 34}" text-anchor="middle" font-size="18" fill="#a7acb8">${label}</text>`
       )
       .join("") +
@@ -1657,6 +1664,86 @@ function updateSummary(state) {
   renderReviewQueue(state);
   renderResources(state);
   renderProfile(state);
+  renderHomeWorkspace(state);
+}
+// The home view is a projection of existing study data; it owns no persistence.
+function renderHomeWorkspace(state) {
+  const gallery = document.getElementById("homeTracks");
+  if (!gallery) return;
+  const stats = getStats(state);
+  const today = new Date();
+  const day = todayKey();
+  const setText = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  };
+  setText("workspaceDate", today.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) + " · " + today.toLocaleDateString("en-GB", { weekday: "long" }));
+  document.getElementById("workspaceDate").dateTime = day;
+  setText("homeDay", String(today.getDate()).padStart(2, "0"));
+  setText("homeWeekday", today.toLocaleDateString("en-GB", { weekday: "long" }));
+  setText("homeMonth", today.toLocaleDateString("en-GB", { month: "long", year: "numeric" }));
+  setText("homeSemester", state.profileSemester || "Your semester workspace");
+  setText("homePersonal", state.customTasks.filter(task => !task.completed).length);
+  setText("homeReview", tracks.reduce((sum, track) => sum + track.tasks.filter((_, index) => reviewDue(state, taskId(track, index)) !== null).length, 0));
+  setText("homeToday", Number(state.activity[day]) || 0);
+  setText("sidebarCheckpoints", `${stats.done} / ${stats.total}`);
+  setText("homeProgressLabel", `${stats.done} of ${stats.total} checkpoints verified`);
+  document.getElementById("homeOrbit").style.setProperty("--progress", `${stats.percent}%`);
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  document.getElementById("homeCalendar").innerHTML = [
+    ...["M", "T", "W", "T", "F", "S", "S"].map(label => `<span class="calendar-weekday">${label}</span>`),
+    ...Array.from({ length: (firstDay.getDay() + 6) % 7 }, () => '<span aria-hidden="true"></span>'),
+    ...Array.from({ length: monthDays }, (_, index) => `<span${index + 1 === today.getDate() ? ' class="calendar-today" aria-current="date"' : ""}>${index + 1}</span>`),
+  ].join("");
+  const counts = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - 6 + index);
+    return { date: dateKey(date), count: Number(state.activity[dateKey(date)]) || 0 };
+  });
+  const peak = Math.max(1, ...counts.map(item => item.count));
+  document.getElementById("homeSpark").innerHTML = counts.map(item => `<span class="spark-day" style="--height:${item.count ? Math.max(10, item.count / peak * 100) : 2}%" title="${item.date}: ${item.count} completions"></span>`).join("");
+  const art = {
+    python: '<span class="art-caption">Language / foundations</span><pre>def learn(topic):\n    practice(topic)\n    return evidence\n&gt;&gt;&gt; learn("Python")</pre>',
+    java: '<span class="art-caption">Object / structure</span><div class="class-diagram"><strong>StudySession</strong><span>+ topic: String<br />+ practice(): void<br />+ verify(): boolean</span></div>',
+    os: '<span class="art-caption">System / process</span><div class="process-diagram"><span>User process</span><br />↓ syscall<br /><span>Linux kernel</span><br />↓<br />CPU · memory · files</div>',
+    campusops: '<span class="art-caption">Project / architecture</span><div class="project-diagram"><span>Java<br />domain</span><span>Python<br />tools</span><span>Linux environment</span></div>',
+  };
+  gallery.innerHTML = tracks.filter(track => art[track.id]).map(track => {
+    const progress = stats.byTrack[track.id];
+    return `<button class="learning-card" data-inspect-track="${track.id}" aria-pressed="${track.id === inspectedTrackId}" aria-label="Inspect ${escapeHtml(track.name)} track"><div class="learning-art art-${track.id}" aria-hidden="true">${art[track.id]}</div><div class="learning-card-copy"><h3>${escapeHtml(track.name)}</h3><dl><div><dt>Type</dt><dd>${track.id === "campusops" ? "Project" : "Learning track"}</dd></div><div><dt>Status</dt><dd>${progress.done === progress.total ? "Verified" : progress.done ? "In progress" : "Ready to begin"}</dd></div><div><dt>Progress</dt><dd>${progress.done} / ${progress.total} verified</dd></div></dl></div></button>`;
+  }).join("");
+  const track = tracks.find(item => item.id === inspectedTrackId) || tracks[0];
+  const progress = stats.byTrack[track.id];
+  const next = nextUp(state, track.id)[0];
+  document.getElementById("homeInspector").innerHTML = `<div class="inspector-record"><div class="record-id"><small>Track record</small><strong>TRK-${String(tracks.indexOf(track) + 1).padStart(3, "0")}<span class="record-barcode" aria-hidden="true"></span></strong></div><dl class="record-meta"><div><dt>Type</dt><dd>${track.id === "campusops" ? "Semester project" : "Learning track"}</dd></div><div><dt>Status</dt><dd>${progress.done === progress.total ? "Verified" : progress.done ? "In progress" : "Ready to begin"}</dd></div></dl><div class="record-title"><h3>${escapeHtml(track.name)}</h3><p>${escapeHtml(track.subtitle)}</p></div><div class="record-details"><h4>Next checkpoint</h4><p>${next ? escapeHtml(next.label) : "All checkpoints verified. Revisit your evidence in a review session."}</p><div class="record-tags"><span>${track.tasks.length} checkpoints</span><span>${track.id === "campusops" ? "Build & document" : "Practice & verify"}</span></div><h4>Progress</h4><div class="record-progress"><div class="record-orbit" style="--progress:${progress.percent}%"><strong>${progress.percent}%</strong></div><div>${progress.done} verified<br />${progress.total - progress.done} remaining<small>Evidence before completion</small></div></div><div class="record-actions"><button class="workspace-button" data-open-track="${track.id}">Open checkpoints ↗</button>${track.source ? `<a class="workspace-button" href="${escapeHtml(track.source)}" target="_blank" rel="noreferrer">Open source ↗</a>` : ""}</div></div></div>`;
+  const sessions = (Array.isArray(state.focus.sessions) ? state.focus.sessions : []).filter(session => session && typeof session.date === "string");
+  const last = sessions.at(-1);
+  setText("homeDailyNote", last ? `${last.note || "Focus session recorded"} · ${formatMinutes(last.minutes)} · ${last.date}` : "Start a focus session. Your study note will appear here.");
+  document.getElementById("homeDailyNote").title = last?.note || "";
+  const entries = [
+    ...sessions.map(session => ({ date: session.date, label: session.note || `${formatMinutes(session.minutes)} focused study`, kind: "Focus" })),
+    ...tracks.flatMap(item => item.tasks.flatMap((task, index) => state.completed[taskId(item, index)] && state.completedAt[taskId(item, index)] ? [{ date: state.completedAt[taskId(item, index)], label: `${item.name}: ${task[0]}`, kind: "Verified" }] : [])),
+    ...state.customTasks.filter(task => task.completed && task.completedAt).map(task => ({ date: task.completedAt, label: task.title, kind: "Task" })),
+  ].filter(entry => typeof entry.date === "string").sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
+  document.getElementById("homeEntries").innerHTML = entries.length ? entries.map(entry => `<div class="home-entry"><time datetime="${escapeHtml(entry.date)}">${escapeHtml(entry.date.slice(5))}</time><span class="entry-text" title="${escapeHtml(entry.label)}">${escapeHtml(entry.label)}</span><span class="entry-kind">${entry.kind}</span></div>`).join("") : '<p class="home-empty">Your study record starts here. Verify a checkpoint or finish a focus session to add an entry.</p>';
+  const resources = state.resources.filter(resource => validResourceUrl(resource.url)).slice(0, 2);
+  document.getElementById("homeResources").innerHTML = resources.length ? `<div class="shelf-links">${resources.map(resource => `<a href="${escapeHtml(validResourceUrl(resource.url))}" target="_blank" rel="noreferrer">${escapeHtml(resource.name)} ↗<small>${escapeHtml(resource.description || new URL(resource.url).hostname)}</small></a>`).join("")}</div>` : '<p class="home-empty">Keep useful courses, repositories, and notes within reach.</p><button class="text-action" data-home-action="newResource">+ Save your first resource</button>';
+}
+function openWorkspaceSection(id) {
+  const section = document.getElementById(id);
+  if (!section) return;
+  if (section.classList.contains("track-card")) {
+    section.classList.add("open");
+    section.setAttribute("aria-expanded", "true");
+  }
+  section.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.querySelectorAll(".nav-button").forEach(nav => {
+    const active = nav.dataset.scroll === id;
+    nav.classList.toggle("active", active);
+    if (active) nav.setAttribute("aria-current", "page");
+    else nav.removeAttribute("aria-current");
+  });
 }
 function escapeHtml(value) {
   return String(value).replace(
@@ -1678,7 +1765,7 @@ function validResourceUrl(value) {
   }
 }
 function safeColor(value) {
-  return /^#[0-9a-fA-F]{6}$/.test(value || "") ? value : "#f6ce50";
+  return /^#[0-9a-fA-F]{6}$/.test(value || "") ? value : "#87926e";
 }
 function clampToCanvas(list, item, left, top) {
   const maxLeft = list.clientWidth - item.offsetWidth - 10;
@@ -2117,7 +2204,7 @@ function addResource(event) {
   });
   saveState(state);
   document.getElementById("resourceForm").reset();
-  document.getElementById("resourceColor").value = "#f6ce50";
+  document.getElementById("resourceColor").value = "#87926e";
   updateSummary(state);
   showToast("Resource saved to your canvas.");
   document.getElementById("resourceName").focus();
@@ -2210,6 +2297,7 @@ function saveJournalFocus() {
   closeJournalPrompt();
   renderFocusTotals(state);
   renderActivity(state);
+  renderHomeWorkspace(state);
   const track = tracks.find(item => item.id === savedTrack);
   showToast(track ? `${track.name} focus logged.` : "Focus session saved.");
 }
@@ -2234,6 +2322,7 @@ function endFocusRun() {
     const state = loadState();
     state.focus.sessions.push({ date: todayKey(), minutes });
     saveState(state);
+    renderHomeWorkspace(state);
     awardPoints(minutes);
   }
   focusCommitted = 0;
@@ -2740,10 +2829,10 @@ function buildSemesterReport(state) {
 @page { size: A4; margin: 9mm 11mm 10mm; }
 * { box-sizing: border-box; }
 body { margin: 0; font: 9.5px/1.45 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #2a2822; background: white; }
-.topbar { height: 6px; border-radius: 4px 4px 0 0; background: linear-gradient(90deg, #f6ce50, #e89a3c); margin-bottom: 14px; }
-.mast { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 11px; border-bottom: 2px solid #f6ce50; margin-bottom: 13px; }
+.topbar { height: 6px; background: #252820; margin-bottom: 14px; }
+.mast { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 11px; border-bottom: 2px solid #87926e; margin-bottom: 13px; }
 .brand { display: flex; align-items: center; gap: 10px; }
-.mark { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(140deg, #f6ce50, #e89a3c); color: #26241f; font: 800 20px/1 -apple-system, "Segoe UI", Arial, sans-serif; }
+.mark { width: 36px; height: 36px; border-radius: 4px; display: grid; place-items: center; background: #d4dac1; color: #252820; font: 800 20px/1 -apple-system, "Segoe UI", Arial, sans-serif; }
 .brand h1 { margin: 0; font-size: 22px; letter-spacing: -.6px; }
 .brand .sub { color: #6f6c60; font-size: 9px; letter-spacing: .2px; margin-top: 2px; }
 .who { text-align: right; }
@@ -2753,10 +2842,10 @@ body { margin: 0; font: 9.5px/1.45 -apple-system, "Segoe UI", Roboto, Arial, san
 .stat { border: 1px solid #ebe6d8; border-radius: 11px; padding: 9px 10px; background: #fff; }
 .stat b { display: block; font-size: 17px; letter-spacing: -.4px; line-height: 1.1; }
 .stat span { display: block; margin-top: 3px; color: #7b776c; font-size: 7px; text-transform: uppercase; letter-spacing: .7px; }
-.stat.hero { border-color: #f0d273; background: linear-gradient(160deg, #fbf3d4, #f8e7ab); }
-.stat.hero b { color: #3a3108; }
+.stat.hero { border-color: #b8b29f; background: #e1e5d4; }
+.stat.hero b { color: #252820; }
 .section-title { display: flex; align-items: center; gap: 7px; margin: 13px 0 7px; font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: #6f6c60; }
-.section-title::before { content: ""; width: 9px; height: 9px; border-radius: 2.5px; background: #f6ce50; }
+.section-title::before { content: ""; width: 9px; height: 9px; border-radius: 2px; background: #87926e; }
 .panel { border: 1px solid #ebe6d8; border-radius: 12px; padding: 10px 12px; background: #fdfdfa; page-break-inside: avoid; }
 .panel h3 { margin: 0 0 7px; font-size: 8.5px; text-transform: uppercase; letter-spacing: .7px; color: #6f6c60; }
 .panel p { margin: 0; color: #6f6c60; }
@@ -2776,7 +2865,7 @@ body { margin: 0; font: 9.5px/1.45 -apple-system, "Segoe UI", Roboto, Arial, san
 .shelf li { border: 1px solid #e9e4d4; border-radius: 999px; padding: 3px 9px; font-size: 8.5px; background: #fff; }
 .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 13px; border-top: 1px solid #ece7d8; padding-top: 8px; color: #8a867b; font-size: 8px; }
 .foot .mark-chip { display: inline-flex; align-items: center; gap: 6px; color: #6f6c60; }
-.foot .mark-chip::before { content: ""; width: 9px; height: 9px; border-radius: 3px; background: linear-gradient(140deg, #f6ce50, #e89a3c); }
+.foot .mark-chip::before { content: ""; width: 9px; height: 9px; border-radius: 2px; background: #87926e; }
 </style></head><body>
 <div class="topbar"></div>
 <div class="mast">
@@ -2811,16 +2900,23 @@ async function init() {
       localStorage.setItem(RESOURCE_SNAP_KEY, snapToggle.checked ? "on" : "off")
     );
   }
-  document.querySelectorAll("[data-scroll]").forEach(button =>
-    button.addEventListener("click", () => {
-      document
-        .getElementById(button.dataset.scroll)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-      document
-        .querySelectorAll(".nav-button")
-        .forEach(nav => nav.classList.toggle("active", nav === button));
-    })
-  );
+  document.addEventListener("click", event => {
+    const inspect = event.target.closest("[data-inspect-track]");
+    if (inspect) {
+      inspectedTrackId = inspect.dataset.inspectTrack;
+      renderHomeWorkspace(loadState());
+      document.querySelector(`[data-inspect-track="${inspectedTrackId}"]`)?.focus({ preventScroll: true });
+      return;
+    }
+    const route = event.target.closest("[data-scroll], [data-open-track]");
+    if (route) openWorkspaceSection(route.dataset.scroll || route.dataset.openTrack);
+    const action = event.target.closest("[data-home-action]")?.dataset.homeAction;
+    if (action === "newTask" || action === "newResource" || action === "search") {
+      const id = action === "newTask" ? "customTaskInput" : action === "newResource" ? "resourceName" : "search";
+      openWorkspaceSection(action === "newTask" ? "custom" : action === "newResource" ? "resources" : "workbench");
+      document.getElementById(id)?.focus({ preventScroll: true });
+    } else if (action) document.getElementById(action)?.click();
+  });
   document.querySelectorAll(".filter").forEach(button =>
     button.addEventListener("click", () => {
       activeFilter = button.dataset.filter;
@@ -3112,7 +3208,13 @@ async function init() {
       setAuthMode(document.getElementById("authForm").dataset.mode !== "signup")
     );
   document.getElementById("signOutTopbar").addEventListener("click", () => {
-    ensureSupabase().then(sb => sb?.auth.signOut());
+    void (async () => {
+      const prepare = document.getElementById("roadmapsFrame")?.contentWindow?.semassistPrepareSignOut;
+      if (!prepare) { showToast("Roadmaps is still opening. Retry sign-out once its cache check is ready."); return; }
+      if (!(await prepare())) return;
+      const sb = await ensureSupabase();
+      await sb?.auth.signOut();
+    })();
   });
   const profileCard = document.querySelector(".profile-card");
   if (profileCard) {
@@ -3179,10 +3281,41 @@ async function init() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") keepaliveFlush();
   });
-  if (
+  const localDemo =
     ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname) &&
-    new URLSearchParams(window.location.search).get("demo") === "1"
-  ) {
+    new URLSearchParams(window.location.search).get("demo") === "1";
+  const roadmapsFrame = document.getElementById("roadmapsFrame");
+  if (roadmapsFrame) {
+    const studyParams = new URLSearchParams(window.location.search);
+    const frameParams = new URLSearchParams({ embedded: "1" });
+    if (localDemo) frameParams.set("demo", "1");
+    for (const key of ["roadmap", "view", "task"]) {
+      if (studyParams.has(key)) frameParams.set(key, studyParams.get(key));
+    }
+    roadmapsFrame.src = `./roadmaps.html?${frameParams}`;
+    window.addEventListener("message", event => {
+      if (
+        event.origin !== window.location.origin ||
+        event.source !== roadmapsFrame.contentWindow
+      ) return;
+      if (event.data?.type === "semassist-roadmaps-height" && Number.isFinite(event.data.height)) {
+        roadmapsFrame.style.height = `${Math.max(240, Math.ceil(event.data.height))}px`;
+      }
+      if (event.data?.type === "semassist-roadmaps-route") {
+        const { roadmap, view, task } = event.data;
+        const id = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i;
+        if (roadmap && (!id.test(roadmap) || !["overview", "roadmap", "schedule", "resources", "progress", "settings"].includes(view) || (task && !id.test(task)))) return;
+        const url = new URL(window.location.href);
+        for (const [key, value] of [["roadmap", roadmap], ["view", view], ["task", task]]) {
+          if (roadmap && value) url.searchParams.set(key, value);
+          else url.searchParams.delete(key);
+        }
+        url.hash = "roadmaps";
+        window.history.replaceState(null, "", url);
+      }
+    });
+  }
+  if (localDemo) {
     showSignedInChrome(null, true);
     return;
   }
@@ -3291,6 +3424,7 @@ export {
   refreshLeaderboard,
   weeklySeries,
   renderProfile,
+  renderHomeWorkspace,
   buildProfileCardSvg,
   wrapLines,
 };

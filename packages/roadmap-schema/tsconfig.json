@@ -5,6 +5,7 @@
     "moduleResolution": "bundler",
     "strict": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
@@ -13,6 +14,7 @@
   "include": [
     "src/**/*.ts",
     "../../scripts/validate-roadmap.ts",
-    "../../scripts/prepare-legacy-migration.ts"
+    "../../scripts/prepare-legacy-migration.ts",
+    "../../scripts/build-skill.ts"
   ]
 }

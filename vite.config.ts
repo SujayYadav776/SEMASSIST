@@ -230,6 +230,9 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      input: ["client/index.html", "client/roadmaps.html"],
+    },
   },
   server: {
     port: 3000,
@@ -246,6 +249,7 @@ export default defineConfig({
     ],
     fs: {
       strict: true,
+      allow: [path.resolve(import.meta.dirname)],
       deny: ["**/.*"],
     },
   },

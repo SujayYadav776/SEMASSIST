@@ -19,6 +19,7 @@ and `tests/roadmap-{schema,tools}.test.ts`. Current dashboard imports remain leg
 | `client/src/pages/Home.tsx` | Route `/` — immediately redirects to the static dashboard |
 | `client/public/study-dashboard-boot.js` | Imports `init` and calls it; the module itself does not self-init |
 | `client/public/study-dashboard.js` | All dashboard behavior; `init()` is the runtime entry |
+| `client/public/workspace.css` | Reference-based paper/charcoal home workspace; responsive shell, gallery and inspector; local font in public/fonts |
 | `server/index.ts` | Express static host + security headers + 404 (production) |
 | `scripts/configure-auth-smtp.mjs` | Owner-side Supabase custom-SMTP configurator (CLI) |
 | `scripts/post-commit`, `scripts/install-autopush-hook.sh` | Auto-push hook and its installer |
@@ -112,3 +113,29 @@ and `tests/roadmap-{schema,tools}.test.ts`. Current dashboard imports remain leg
 | CI / commands | `.github/workflows/ci.yml`, `package.json`, [AGENTS.md](../AGENTS.md) |
 | Test harness or fake Supabase | `tests/helpers.ts`, `vitest.config.ts` |
 | Owner-side setup | `continue.md` → "Required manual Supabase setup"; `.env.example`; `scripts/configure-auth-smtp.mjs` |
+
+## Imported roadmap study views and learner sync
+
+| Entry | Responsibility |
+| --- | --- |
+| client/roadmaps.html + client/roadmaps/styles.css | Roadmaps entry and paper/charcoal styling; shared theme.js initializes light/dark mode inside the iframe |
+| client/roadmaps/roadmap-library.tsx | Library/auth/import, current package loading, safe signout and study entry |
+| client/roadmaps/study-workspace.tsx | Overview/Roadmap/Schedule/Resources/Progress/Settings, task dialog, conflict UI and recovery export |
+| client/roadmaps/study-model.ts | Local dates, eligible study days, required progress, warnings and dependency layout |
+| client/roadmaps/sync.ts | Account-scoped IndexedDB, ordered outbox, optimistic state, retries and conflict resolution |
+| client/roadmaps/study-storage.ts | Cloud rows, local demo transport and recovery downloads |
+| packages/roadmap-schema/src/learner.ts | Validated learner mutations and field-level baseline merge |
+| supabase/functions/roadmap-mutate/index.ts | Authenticated learner mutation validation and RPC boundary |
+| supabase/migrations/202610110001_learner_mutations.sql | Date overrides, mutation receipts, field conflict checks and service-only learner writes |
+| tests/roadmap-study.test.ts | Study calculations, content safety, StrictMode dialog and durable sync recovery |
+
+Tests/dashboard-dom.test.ts covers trusted embedded routes and signout recovery
+guards. client/roadmaps/tsconfig.json provides a targeted app typecheck while the
+unrelated client/src workstream still has pre-existing root type errors.
+
+### Backup/replan and release tooling
+- packages/roadmap-schema/src/backup.ts: versioned backup validation, active definition assembly, private-by-default snapshots, baseline/explicit mapping checks.
+- client/roadmaps/demo-account.ts: atomic demo account envelope and legacy demo migration; roadmap-library.tsx: backup/restore/replan/saved schedule controls.
+- supabase/migrations/202610110002_backup_replan.sql and functions/roadmap-account: authenticated account operations, locks, receipts, restore and activation.
+- tests/roadmap-{backup,database,library}.test.ts: contract, actual PostgreSQL/RLS and real library control checks.
+- skills/semassist/SKILL.md, scripts/build-skill.ts: independent skill package; scripts/check-hosting.mjs: production routes and security headers; docs/BACKUP_REPLAN.md: workflows/recovery/deployment.

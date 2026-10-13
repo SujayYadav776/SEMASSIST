@@ -1,31 +1,149 @@
 # Handoff — SEM ASSIST
 
-## Latest checkpoint — 2026-10-10, PRD phases 1/2
+## Latest checkpoint — 2026-10-13, theme consistency
 
-The user authorized phases 1/2 from `tasks.md`. Phase 2 now has a shared Zod
-v1.0.0 package/entity contract, generated JSON Schema, semantic validation,
-`roadmap:validate`/`roadmap:check`/`roadmap:migrate` commands, examples, and 33 new
-tests. `npm test` passed 191 tests; standalone schema/tools typecheck passed;
-lint passed with the existing warning. See `docs/ROADMAP_CONTRACT.md`.
+The remaining yellow legacy components now use the home workspace's paper,
+charcoal, muted-sage palette. This includes detail cards, profile/leaderboard,
+controls/dialogs, Roadmaps library and study screens, share SVG, printable report
+and 404 page. Roadmaps loads the shared theme script, following dashboard dark
+mode. Existing records/routes/auth flows are unchanged. Browser reviewed each
+major surface in light/dark; full tests passed 235/236 due only to an old default
+resource-color assertion, then focused unit tests passed 61/61 after updating it.
+Build passes; lint has 0 errors and one existing warning.
+The earlier user instruction to push the work remains outstanding. Stage only
+project work; leave unrelated client/src/**, continue.md and .freebuff artifacts out.
 
-Phase 1 is partial: staged architecture decision DEC-014; frozen 76-checkpoint
-UUID map; pure reversible migration snapshots preserving exact backup bytes,
-unknown fields/history, notes, focus, resources, and personal tasks. The guest
-preview (zero completed checkpoints) was exported/staged to ignored
-`.freebuff/semassist-migration/guest-{backup,staged}-2026-10-10.json`.
-No account/database migration was applied. Root install/build paths and legacy
-product remain intact; `apps/web`/`skills/semassist` document future boundaries.
+## Latest checkpoint — 2026-10-12, home redesign
 
-Owner confirmed the existing Supabase URL; it still fails DNS. `.env.local`
-credentials are absent. Live auth/schema/templates/redirects and cloud inventory
-remain blocked. Unrelated React edits were left alone, so relocation/workspace
-wiring is deferred. Phase 3 and later have not been authorized. Next action:
-finish live phase-1 checks when project access is available; use `tasks.md` as
-the authoritative checklist. The older SMTP handoff below is historical.
+Latest heading choice: Space Grotesk replaces the F1 Torque request. The static
+dashboard and Roadmaps headings/wordmark use the local variable font in public/
+fonts with its OFL license. DM Sans body/nav and approved 1.2× sizes remain.
+Browser verifies font loading/computed families and default/360px page fit;
+236 tests, final build and lint pass (one existing warning). New evidence:
+.freebuff/home-space-grotesk.png. No commit/push/deploy or data/JS changes.
+
+Latest correction supersedes the 2× note below: user requested 1.2× original
+size while retaining DM Sans. Text sizes are 60% of the previous 2× sizes, and
+compact layout columns/controls replace the large-layout overrides. New evidence
+is .freebuff/home-120.png; no JS/data changes. See current task for validation.
+
+Readability follow-up: user requested 2× text and DM Sans on the page. All static
+document CSS text sizes are doubled, including legacy detail sections/dialogs.
+workspace.css uses local fonts/dm-sans.ttf (OFL included); dashboard Google Fonts
+links and the unused Mono font were removed. Controls/columns expand and smaller
+screens stack panels for wrapping. No data/JS behavior changes. 236 tests, build
+and lint pass (one existing warning); default/360px browser overflow and actual
+22px/24px DM Sans were checked. New evidence: .freebuff/home-readable.png.
+The Roadmaps iframe is the separate next redesign; no commit/push/deployment.
+
+User now requests a cream/charcoal archival workspace based on their supplied
+reference, starting with home. Earlier yellow-theme preservation is superseded
+for this checkpoint. Product HTML/JS plus new public workspace.css implement it;
+no client/src files or Roadmaps data contracts were changed. Home metrics/entries
+come from existing legacy study state, not aggregate imported Roadmaps records.
+Track gallery selects a read-only inspector; opening checkpoints uses stable
+anchors and opens the actual track. New task/search/resource shortcuts focus
+existing forms. Profile, leaderboard, security and focus history are retained
+inside the inspector's profile disclosure. Existing Roadmaps iframe is unchanged.
+Verification: 236/236 tests, build and lint (one existing warning) pass. Browser
+checked track inspection/opening, new task focus, profile/share/pulse access,
+desktop/360px/390px layout and both themes. Preview evidence is the untracked
+.freebuff/home-redesign.png; do not commit private artifacts. Next is embedded Roadmaps styling.
+No commit/push/deploy; cloud owner/connectivity and full accessibility gates remain.
+
+## Latest checkpoint — 2026-10-11, remaining PRD phases 7/8
+
+See .ai/CURRENT_TASK.md, tasks.md and docs/BACKUP_REPLAN.md for exact status.
+Backup contract and baseline/mapping helpers live in shared backup.ts. The third
+SQL migration serializes account operations, retains recovery receipts, provides
+atomic merge/replace restore and baseline-checked activation, preserves all
+schedules, and revokes direct browser metadata/pointer writes. roadmap-account
+validates/authenticates those operations; import pins explicit mapping choices.
+All three migrations and all three functions must deploy together. No cloud
+changes were applied. The existing static yellow dashboard is preserved.
+
+Independent skill: npm run skill:build creates dist/skills/semassist; the complete
+folder/ZIP includes validator, schema, references, examples and licenses. CI adds
+actual PostgreSQL/RLS cases, product types, build/hosting, Deno and skill checks.
+Tests: 234/234 full, final focused library 4/4; lint 0 errors/1 existing warning;
+product types, production build/HTTP hosting, Edge types and skill validation pass.
+Full root tsc remains red on unrelated shell edits. Private preview artifacts are
+in .freebuff and must not be committed. No commit/push was requested this turn.
+
+Remaining gates: reachable Supabase and owner deployment/SMTP access, live auth/
+two-device isolation and all five PRD flows, full WCAG assistive-technology audit.
+A DNS query returned addresses, but HTTPS health still failed resolution; do not
+claim service recovery. Browser download-event capture stalled; actual library
+controls were verified with jsdom, and UI phone overflow/layout were checked.
+
+## Previous phase-5/6 checkpoint (historical)
+StudyWorkspace adds all six study views inside the original yellow dashboard.
+StudySync owns account/roadmap IndexedDB snapshots and ordered durable outboxes.
+Learner validation/field-level conflict merge lives in the shared schema package;
+cloud mutations go through roadmap-mutate and a service-only receipt RPC in the
+202610110001 migration. The preceding undeployed migration now permits learner
+row cascades when a parent roadmap is deleted. No cloud changes were applied.
+
+The demo browser verified completion, plain notes and 15 logged minutes after a
+nested-route reload. Sync tests cover offline ordered replay, closure recovery,
+lost acknowledgements, independent-field merges, same-field note conflicts,
+cache failures, account ownership, disposal and drafts edited during refresh.
+Full suite passed 218/218 and final focused study checks passed 23/23; lint passed with one pre-existing warning; roadmap
+app/schema typechecks and production build passed.
+tasks.md records the final evidence. Full PostgreSQL/Edge execution, second-device
+exchange and a complete WCAG audit remain open. Supabase DNS still fails.
+
+Account cache clearing/signout exports and confirms pending edits; other study
+tabs must close first. One Web Lock holds the browser editing workspace for a
+roadmap, preventing tabs overwriting an outbox. Unread cache data blocks opening instead of replacing pending work. Cache write
+failures use a visible
+localStorage recovery fallback and in-memory download. Offline study is for an
+already-loaded page with opened data; there is no offline app-shell/service worker.
+Settings recovery copies are not the full-account phase-7 restore contract.
+
+Deploy both SQL migrations and both Edge functions once the project is available;
+verify duplicate mutation delivery, simultaneous edits, account isolation, and
+cache/signout safety live. Do not commit/push unless requested. Leave unrelated
+client/src and continue.md edits alone. Phase 7 requires user direction.
+
+## Earlier checkpoint — 2026-10-10, PRD phases 3/4
+Phase 3/4 local implementation was authorized after phases 1/2. The shared Zod
+contract and validator remain in `packages/roadmap-schema`. New code includes
+`supabase/migrations/202610100001_roadmap_library.sql` (owner-scoped tables/RLS,
+immutable revisions/schedules, learner record tables, server revision triggers,
+import receipts, transactional import/restore/schedule activation) and
+`supabase/functions/roadmap-import` (bearer-session verification, shared package
+validation, canonical digest, service-role-only import RPC). The React library is
+at `/roadmaps.html`, embedded from the original dashboard's **Roadmaps** nav
+inside its existing card layout and yellow/cream/charcoal theme. It has account
+auth/list/import and a browser-local demo preview, search, switching,
+duplication, archive/delete, export, and confirmed import preview. See
+`apps/web/README.md` for local/cloud setup.
+
+Do not move or edit the unrelated dirty `client/src/**` work. The library is a
+separate Vite entry at `client/roadmaps/`, embedded in the existing
+`/study-dashboard.html`; direct `/roadmaps.html` access remains available.
+Vercel builds both entries through `npm run build` and rewrites `/roadmaps` to
+the new app.
+
+The Vite production bundle and server bundle built; the full suite passed
+(193/193), and lint passed with the existing warning in `vite.config.ts`. After
+integrating the library into the legacy dashboard, the dashboard DOM suite
+passed (88/88), lint passed again, and the production build passed again. The preview now
+shows topic/task field changes, proposed carryover mappings, and workload totals,
+peak daily load, and capacity overruns. The local browser preview previously
+imported the beginner Python fixture and showed the saved roadmap. Node native
+realpath is denied by this sandbox (EPERM), so build/test commands used a
+process-only compatibility override; there is no repository workaround. The
+Supabase host still fails DNS, so migration deployment, auth, another-device
+retrieval, and two-account isolation are unverified; no live cloud configuration
+or data changed. Learner mutation idempotency remains in phase 6. No commit or
+push was requested for this phase. `tasks.md` is authoritative for remaining
+work. Phase 1/2 evidence and prior SMTP handoff are retained below as history.
 
 ## Last updated
 
-2026-10-10 21:17 SLST (+0530).
+2026-10-10 22:10 SLST (+0530).
 
 ## Verified baseline
 

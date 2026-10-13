@@ -15,7 +15,7 @@
   );
 
   function themeColorFor(theme) {
-    return theme === "dark" ? "#23221f" : "#a9afba";
+    return theme === "dark" ? "#252820" : "#e8e2d2";
   }
 
   function setThemeColor(theme) {

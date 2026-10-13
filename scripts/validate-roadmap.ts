@@ -10,7 +10,7 @@ if (args.length === 1 && args[0] === "--json-schema") {
   console.log(JSON.stringify(packageJsonSchema(), null, 2));
 } else if (args.length !== 1 || args[0].startsWith("--")) {
   console.error(
-    "Usage: npm run roadmap:validate -- <package.json> | --json-schema"
+    "Usage: node <validator> <package.json> | --json-schema"
   );
   process.exitCode = 2;
 } else {

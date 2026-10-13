@@ -1,11 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "vite build",
+  "buildCommand": "npm run build",
   "outputDirectory": "dist/public",
   "rewrites": [
     {
       "source": "/",
       "destination": "/study-dashboard.html"
+    },
+    {
+      "source": "/roadmaps",
+      "destination": "/roadmaps.html"
     }
   ],
   "headers": [
@@ -14,7 +18,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://esm.sh https://nrxbelpmydquivcphxry.supabase.co wss://nrxbelpmydquivcphxry.supabase.co ws://localhost:* ws://127.0.0.1:*; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+          "value": "default-src 'self'; script-src 'self' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://esm.sh https://nrxbelpmydquivcphxry.supabase.co wss://nrxbelpmydquivcphxry.supabase.co ws://localhost:* ws://127.0.0.1:*; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
         },
         {
           "key": "X-Content-Type-Options",
@@ -22,7 +26,7 @@
         },
         {
           "key": "X-Frame-Options",
-          "value": "DENY"
+          "value": "SAMEORIGIN"
         },
         {
           "key": "Referrer-Policy",

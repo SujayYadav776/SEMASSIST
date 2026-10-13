@@ -152,7 +152,7 @@ Status: Active
 Decision date: 2026-10-10
 Decision: Adopt React/TypeScript as the planned multi-roadmap UI target, but keep the current static dashboard, Vite root, hosting, and redirects working while phases 1/2 introduce `packages/roadmap-schema`, examples, and reserved `apps/web`/`skills/semassist` boundaries. Root scripts directly consume the schema package; no workspace install or dependency change is required at this checkpoint.
 Reason: The user authorized phases 1/2, while `client/src/**` contains unrelated edits that repository instructions require leaving alone. Contract/migration work is independent of moving that code and of the live Supabase DNS blocker.
-Consequences: `apps/web` is a documented future destination, not a functioning replacement app. Coordinate the unrelated work before relocation; phase 4 implements the new web application. Existing guest/account progress is not rewritten by this checkpoint.
+Consequences: `apps/web` remains the documented product boundary; phase 4 now has a separate React entry under `client/roadmaps/` until unrelated `client/src/**` edits are coordinated. The legacy dashboard stays available, and existing guest/account progress is not rewritten by the library.
 Evidence: `tasks.md`, `packages/roadmap-schema`, `docs/ROADMAP_CONTRACT.md`, `apps/web/README.md`.
 
 ## DEC-015 — One Zod contract, separate semantic validation, reversible legacy staging
@@ -162,3 +162,38 @@ Decision: Use installed Zod 4 for the canonical package v1.0.0 schema and derive
 Reason: Avoid duplicated contracts and protect identity/progress when schedules change. Legacy completion dates do not contain enough information to construct UTC event timestamps.
 Consequences: JSON Schema-only validation is insufficient. Phase 3 must authenticate, validate claimed baselines against stored records, enforce immutable content, and transact persistence. Unsupported package versions fail explicitly; no historical roadmap package formats exist yet. Private snapshots stay ignored. The migration tool prepares data; it is not a completed account/database migration.
 Evidence: `packages/roadmap-schema/src`, `legacy-task-map.json`, `tests/roadmap-schema.test.ts`, `tests/roadmap-tools.test.ts`.
+
+## DEC-016 — Add the roadmap library as a separate Vite entry and keep imports behind an Edge Function
+Status: Active
+Decision date: 2026-10-10
+Recorded on: 2026-10-10
+Decision: Keep `/study-dashboard.html` intact and add `/roadmaps.html` as a separate React/Vite entry under `client/roadmaps/`. Persist roadmap definitions through owner-scoped Supabase tables. Validate imports with the shared package validator in a Supabase Edge Function, then use a service-role-only PostgreSQL RPC for the atomic write; the service key exists only in Supabase Function secrets.
+Reason: `client/src/**` has another active workstream and must not be overwritten. The database transaction must validate the current stored baseline and write content, schedule, active pointers, and the import receipt together.
+Alternatives: Relocating the existing dashboard now (deferred until its unrelated edits are coordinated); allowing the browser to insert immutable revision rows (rejected because clients could bypass semantic validation).
+Consequences: The library is embedded under the existing dashboard's Roadmaps navigation and uses its yellow/cream/charcoal visual system; `/roadmaps.html` remains available directly. Local demo mode is available without Supabase and saves only in browser storage. Account sync requires applying the SQL migration and deploying the Edge Function. The configured Supabase host currently fails DNS, so cloud behavior and isolation remain unverified.
+Evidence: `client/roadmaps.html`, `client/roadmaps/`, `supabase/migrations/202610100001_roadmap_library.sql`, `supabase/functions/roadmap-import/`, `apps/web/README.md`.
+Relevant files: `vite.config.ts`, `vercel.json`, `tasks.md`.
+
+## DEC-017 — Durable learner outbox, server receipts and explicit conflicts
+Status: Active
+Decision date: 2026-10-11
+Decision: Cache each account/roadmap snapshot and its ordered optimistic outbox
+atomically in IndexedDB. Hold one browser Web Lock per editing workspace. Send
+validated learner mutations through an authenticated Edge Function to a
+service-only SQL transaction with owner-scoped deduplication receipts. Compare
+changed fields against their authoritative baseline; merge independent changes,
+require user resolution for same-field edits, and retain both conflicting notes.
+Reason: Preserve work through connection loss and lost acknowledgements without
+using device clocks or silent last-write-wins rules.
+Consequences: Other editing tabs wait; account clearing requires closing them.
+Cache failures stay visible, with recovery fallback/download. The app shell needs
+network on reload; no PWA is introduced. Full-account restore remains phase 7.
+Evidence: learner.ts, sync.ts, study-workspace.tsx, roadmap-study.test.ts,
+202610110001_learner_mutations.sql and roadmap-mutate/index.ts. Cloud execution
+and isolation are release gates; they have not been verified live.
+
+## DEC-018 — Account snapshot, transactional restore and explicit replan mappings
+Status: Active
+Decision date: 2026-10-11
+Decision: Keep Roadmaps backups separate from agent packages and legacy exports. Serialize server account operations with an advisory transaction lock; preserve private pre-restore receipts and compare the authoritative preview before restore. Merge skips complete colliding roadmaps; replace is atomic and raises learner revisions. Substantial task changes require new IDs; completion/notes copy only through explicit decisions, preserving originals. Retain all schedules and historical records. Package the independent skill by bundling the canonical validator, generated schema and fixtures. Release CI checks active product types without rewriting unrelated shell edits. Hosting permits same-origin frames for embedded Roadmaps.
+Evidence: backup.ts, 202610110002_backup_replan.sql, roadmap-account, roadmap-library tests, database tests, build-skill.ts and docs/BACKUP_REPLAN.md. Live release and full WCAG gates remain unverified.
