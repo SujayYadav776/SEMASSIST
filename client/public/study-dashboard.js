@@ -1721,14 +1721,6 @@ function renderHomeWorkspace(state) {
   const last = sessions.at(-1);
   setText("homeDailyNote", last ? `${last.note || "Focus session recorded"} · ${formatMinutes(last.minutes)} · ${last.date}` : "Start a focus session. Your study note will appear here.");
   document.getElementById("homeDailyNote").title = last?.note || "";
-  const entries = [
-    ...sessions.map(session => ({ date: session.date, label: session.note || `${formatMinutes(session.minutes)} focused study`, kind: "Focus" })),
-    ...tracks.flatMap(item => item.tasks.flatMap((task, index) => state.completed[taskId(item, index)] && state.completedAt[taskId(item, index)] ? [{ date: state.completedAt[taskId(item, index)], label: `${item.name}: ${task[0]}`, kind: "Verified" }] : [])),
-    ...state.customTasks.filter(task => task.completed && task.completedAt).map(task => ({ date: task.completedAt, label: task.title, kind: "Task" })),
-  ].filter(entry => typeof entry.date === "string").sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
-  document.getElementById("homeEntries").innerHTML = entries.length ? entries.map(entry => `<div class="home-entry"><time datetime="${escapeHtml(entry.date)}">${escapeHtml(entry.date.slice(5))}</time><span class="entry-text" title="${escapeHtml(entry.label)}">${escapeHtml(entry.label)}</span><span class="entry-kind">${entry.kind}</span></div>`).join("") : '<p class="home-empty">Your study record starts here. Verify a checkpoint or finish a focus session to add an entry.</p>';
-  const resources = state.resources.filter(resource => validResourceUrl(resource.url)).slice(0, 2);
-  document.getElementById("homeResources").innerHTML = resources.length ? `<div class="shelf-links">${resources.map(resource => `<a href="${escapeHtml(validResourceUrl(resource.url))}" target="_blank" rel="noreferrer">${escapeHtml(resource.name)} ↗<small>${escapeHtml(resource.description || new URL(resource.url).hostname)}</small></a>`).join("")}</div>` : '<p class="home-empty">Keep useful courses, repositories, and notes within reach.</p><button class="text-action" data-home-action="newResource">+ Save your first resource</button>';
 }
 function openWorkspaceSection(id) {
   const section = document.getElementById(id);
@@ -1961,9 +1953,22 @@ function renderActivity(state) {
   const grid = document.getElementById("activityCalendar");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const start = new Date(today);
-  start.setDate(start.getDate() - 363 - start.getDay());
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const monthLabel = document.getElementById("activityMonth");
+  if (monthLabel) {
+    monthLabel.textContent = monthStart.toLocaleDateString(undefined, {
+      month: "long",
+      year: "numeric",
+    });
+  }
   grid.innerHTML = "";
+  for (let index = 0; index < monthStart.getDay(); index++) {
+    const spacer = document.createElement("span");
+    spacer.className = "activity-spacer";
+    spacer.setAttribute("aria-hidden", "true");
+    grid.appendChild(spacer);
+  }
   const sessionsByDay = {};
   (Array.isArray(state.focus.sessions) ? state.focus.sessions : []).forEach(
     session => {
@@ -1983,15 +1988,19 @@ function renderActivity(state) {
       }
     }
   );
-  for (let index = 0; index < 364; index++) {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
+  for (let index = 0; index < monthDays; index++) {
+    const date = new Date(monthStart);
+    date.setDate(index + 1);
     const key = dateKey(date);
     const count = Number(state.activity[key]) || 0;
     const level =
       count === 0 ? 0 : count === 1 ? 1 : count === 2 ? 2 : count <= 4 ? 3 : 4;
     const dot = document.createElement("i");
-    dot.className = "activity-dot" + (level ? ` level-${level}` : "");
+    dot.className =
+      "activity-dot" +
+      (level ? ` level-${level}` : "") +
+      (key === dateKey(today) ? " today" : "");
+    dot.textContent = String(index + 1);
     let title = `${key}: ${count} task ${count === 1 ? "completion" : "completions"}`;
     const logged = sessionsByDay[key];
     if (logged && logged.minutes > 0) {
@@ -1999,6 +2008,8 @@ function renderActivity(state) {
       if (logged.notes.length) title += ` — “${logged.notes[0]}”`;
     }
     dot.title = title;
+    dot.setAttribute("aria-label", title);
+    dot.setAttribute("role", "img");
     grid.appendChild(dot);
   }
   updateCalendarSummary(state);
@@ -2006,16 +2017,22 @@ function renderActivity(state) {
 function updateCalendarSummary(state) {
   let active = 0,
     total = 0;
-  Object.values(state.activity || {}).forEach(value => {
+  const monthKey = todayKey().slice(0, 7);
+  Object.entries(state.activity || {}).forEach(([date, value]) => {
+    if (!date.startsWith(monthKey)) return;
     const n = Number(value) || 0;
     if (n) {
       active++;
       total += n;
     }
   });
-  const focusTotal = Object.values(
+  const focusTotal = Object.entries(
     state.focus && typeof state.focus.days === "object" ? state.focus.days : {}
-  ).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  ).reduce(
+    (sum, [date, value]) =>
+      sum + (date.startsWith(monthKey) ? Number(value) || 0 : 0),
+    0
+  );
   const summary = active
     ? `${active} active days · ${total} completions`
     : "No activity recorded yet.";
@@ -2904,7 +2921,11 @@ async function init() {
     const inspect = event.target.closest("[data-inspect-track]");
     if (inspect) {
       inspectedTrackId = inspect.dataset.inspectTrack;
-      renderHomeWorkspace(loadState());
+      const state = loadState();
+      state.queueFocus = inspectedTrackId;
+      saveState(state);
+      renderMissionQueue(state);
+      renderHomeWorkspace(state);
       document.querySelector(`[data-inspect-track="${inspectedTrackId}"]`)?.focus({ preventScroll: true });
       return;
     }

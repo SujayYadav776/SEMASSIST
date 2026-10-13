@@ -3,7 +3,15 @@
 Last updated: 2026-10-13 (Asia/Colombo)
 
 Source: [PRD v1.1](../SEMASSIST-agent-handoff/PRD.md), dated 2026-10-10.
-Status: phases 2–7 and the local phase-8 skill/release tooling are implemented. Cloud rollout, SMTP/auth, real cross-device flows, and the full assistive-technology audit remain open. Project changes were committed and pushed to origin/main as 1d134fb; production deployment was not verified.
+Status: phases 2–7 and the local phase-8 skill/release tooling are implemented. Cloud rollout, SMTP/auth, real cross-device flows, and the full assistive-technology audit remain open. Prior changes were pushed to origin/main as 1d134fb; current dashboard changes are local and uncommitted. Production deployment was not verified.
+
+## Activity heatmap and roadmap access — 2026-10-13
+
+- [ ] Implement compact current-month heatmap, weekday labels, activity intensity, current-day outline, and current-month summary totals (implementation complete; not verified).
+- [ ] Add direct My Roadmaps links in Learning Tracks and Study Checkpoints (implementation complete; not verified).
+- [ ] Browser and automated verification (not run in this session).
+
+Changes are local and uncommitted. Next: inspect the monthly heatmap and roadmap links in the preview; existing unrelated `client/src/**` and `continue.md` edits remain untouched.
 
 ## Updating this checklist
 
@@ -13,6 +21,21 @@ Status: phases 2–7 and the local phase-8 skill/release tooling are implemented
 - Keep `.ai/CURRENT_TASK.md` aligned; update `.ai/HANDOFF.md` for substantial handoffs.
 - Preserve existing learner data and unrelated working-tree edits. Never record credentials here.
 
+## Track selection checkpoint — 2026-10-13
+
+- [x] Selecting a learning track now immediately filters Upcoming Checkpoints to that track and saves the selected filter.
+- [x] The inspector follows the selected track; checkpoint progress is unchanged.
+- [ ] Browser and automated verification (not run in this session).
+
+Changes are local and uncommitted. Next: verify track selection and queue behavior in the browser.
+## Home overview cleanup — 2026-10-13
+
+- [x] Remove the Daily log, Recent study entries, and Resource shelf cards from the home overview.
+- [x] Keep the focus timer available inside an expandable Activity calendar panel and preserve saved focus sessions.
+- [x] Keep the Resource canvas and stored resources available from the Resources navigation item.
+- [x] Verify the shorter home layout and expanded timer in the browser; 93 dashboard DOM tests, production build, and lint pass (0 errors, 1 existing warning).
+
+This checkpoint is local and uncommitted. Next: review the new overview in the preview; the separate cloud rollout and accessibility gates remain open.
 ## Website redesign — checkpoint 1: home dashboard
 
 The user's new reference supersedes the earlier yellow-theme preservation request
@@ -323,3 +346,11 @@ also verified in jsdom. Full live/assistive-technology gates remain unchecked.
 
 | 2026-10-11 | Remaining local phases 7/8 | Shared backup validator, atomic restore, explicit mappings and schedule history; seven actual PostgreSQL cases, four real library control cases; full 234-test suite and release checks passed. Yellow UI retained. No cloud writes/commit/push. | Owner Supabase/Vercel/SMTP access and reachable service are needed for live deployment, real account/device flows and final accessibility sign-off. |
 | 2026-10-13 | Theme consistency and push | Paper/charcoal styling now covers the remaining profile, detail and Roadmaps surfaces, exports and 404. Browser light/dark review, production build, lint and regression checks completed; commit 1d134fb pushed to origin/main. Unrelated shell edits and private previews excluded. | Cloud rollout, SMTP/auth, cross-device verification and assistive-technology audit remain open. |
+
+| 2026-10-13 | Home overview cleanup | Removed three overview cards; moved focus timer into Activity calendar while leaving focus/resource data and the full Resource canvas intact. Browser reviewed overview and expanded timer. 93 dashboard DOM tests, build, and lint pass (0 errors/1 existing warning). No commit or push. | Review the local preview; cloud rollout and full accessibility audit remain open. |
+
+| 2026-10-13 | Track-linked checkpoint queue | Selecting a learning track now immediately filters Upcoming Checkpoints and persists that track as the queue focus. The inspector still updates, and progress is preserved. Verification was not run in this session. | Verify selecting each track updates the queue in the browser. |
+
+| 2026-10-13 | Reverted Aminute font trial | Removed the supplied font and restored the prior heading/number styling across the dashboard and Roadmaps. | None. |
+
+| 2026-10-13 | Scannable track codes reverted | Restored the original decorative stripe barcode and removed QR assets and track-link behavior at the user's request. | None. |

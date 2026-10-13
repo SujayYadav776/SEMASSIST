@@ -9,10 +9,11 @@ import {
 } from "./helpers";
 
 describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
-  it("selects a home track without changing progress and opens its real checkpoints", async () => {
+  it("selects a home track, filters upcoming checkpoints, and opens its real checkpoints", async () => {
     const { doc } = await bootApp({ url: "http://localhost:3000/study-dashboard.html?demo=1" });
     expect(doc.querySelectorAll(".learning-card")).toHaveLength(4);
-    expect(text(byId(doc, "homeEntries"))).toContain("Your study record starts here");
+    expect(doc.querySelector(".timer-card, .recent-entries, .resource-highlight")).toBeNull();
+    expect(doc.querySelector("#activity .focus-panel #timerStart")).not.toBeNull();
     byId(doc, "java")!.scrollIntoView = vi.fn();
     byId(doc, "custom")!.scrollIntoView = vi.fn();
     const before = stored(doc);
@@ -22,7 +23,9 @@ describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
     doc.querySelector<HTMLButtonElement>('[data-open-track="java"]')!.click();
     expect(byId(doc, "java")!.getAttribute("aria-expanded")).toBe("true");
     expect(byId(doc, "java")!.scrollIntoView).toHaveBeenCalled();
-    expect(stored(doc)).toEqual(before);
+    expect((stored(doc) as { queueFocus: string }).queueFocus).toBe("java");
+    expect([...doc.querySelectorAll<HTMLElement>("#missionQueue .queue-row")].every(row => row.dataset.track === "java")).toBe(true);
+    expect((stored(doc) as { completed: unknown }).completed).toEqual((before as { completed: unknown }).completed);
     doc.querySelector<HTMLButtonElement>('[data-home-action="newTask"]')!.click();
     expect(doc.activeElement).toBe(byId(doc, "customTaskInput"));
   });
@@ -37,16 +40,15 @@ describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
       }) },
     });
     expect(byId(doc, "homeDailyNote")!.textContent).toContain('<img src=x');
-    expect(byId(doc, "homeEntries")!.querySelector("img")).toBeNull();
-    expect(byId(doc, "homeResources")!.querySelectorAll("a")).toHaveLength(1);
-    expect(byId(doc, "homeResources")!.textContent).toContain("<Study notes>");
+    expect(byId(doc, "homeDailyNote")!.querySelector("img")).toBeNull();
+    expect(byId(doc, "resourceList")!.querySelectorAll("a")).toHaveLength(1);
+    expect(byId(doc, "resourceList")!.textContent).toContain("<Study notes>");
     doc.querySelector<HTMLInputElement>('.task-row[data-task-id="python-1"] .check')!.click();
     expect(text(byId(doc, "sidebarCheckpoints"))).toBe("1 / 76");
     expect(text(byId(doc, "homeToday"))).toBe("1");
-    expect(text(byId(doc, "homeEntries"))).toContain("Python: Learn the basics");
     expect(byId(doc, "workspaceDate")!.getAttribute("datetime")).toBe(app.todayKey());
     doc.querySelector<HTMLInputElement>('.task-row[data-task-id="python-1"] .check')!.click();
-    expect(text(byId(doc, "homeEntries"))).not.toContain("Python: Learn the basics");
+    expect(text(byId(doc, "sidebarCheckpoints"))).toBe("0 / 76");
   });
 
   it("opens a local demo without initializing Supabase or exposing account controls", async () => {

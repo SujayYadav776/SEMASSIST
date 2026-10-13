@@ -1,5 +1,29 @@
 # Current task
 
+## Active checkpoint — monthly activity heatmap and roadmap access (2026-10-13)
+
+The Activity calendar now renders only the current month as a compact seven-column
+heatmap with weekday headings and a current-day outline. Learning Tracks and Study
+Checkpoints each link directly to My Roadmaps. Browser and automated verification
+were not run. Changes are local and uncommitted. Next: inspect both links and the
+monthly layout in the browser preview.
+
+## Active checkpoint — track-linked checkpoint queue (2026-10-13)
+
+Selecting a learning track now sets the persisted Upcoming Checkpoints filter to
+that track, redraws its queue immediately, and updates the study inspector. No
+checkpoint progress is changed. Browser and automated verification were not run
+for this change. Changes are local and uncommitted. Next: verify track selection
+and queue contents in the browser.
+## Active checkpoint — home overview cleanup (2026-10-13)
+
+The Daily log, Recent study entries, and Resource shelf cards were removed from
+the home overview. The focus timer moved to an expandable panel in Activity
+calendar; its existing controls and saved sessions remain. Resources remain in
+the full Resource canvas. Browser checked the shorter overview and timer panel;
+93 dashboard DOM tests, production build, and lint pass (0 errors, one existing
+warning). These changes are local and uncommitted. Next: user preview/review;
+cloud rollout and full accessibility audit remain open.
 ## Active checkpoint — full theme consistency (2026-10-13)
 
 The user asked to remove the remaining yellow components and match the new
