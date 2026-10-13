@@ -12,8 +12,9 @@ retaining track distinction. No data or account behavior changed. Browser checke
 profile control spacing, Roadmaps library/study in light and dark, SVG share card,
 print report and 404. One default-color unit assertion was updated. The full run
 passed 235/236 before that fix; the focused 61/61 unit tests then passed. Build
-and lint pass after final edits (one existing lint warning). Next: carry out the
-user's earlier push request while excluding unrelated client/src and continue.md.
+and lint pass after final edits (one existing lint warning). Committed and pushed as 1d134fb to origin/main, excluding unrelated
+client/src, continue.md and private preview artifacts. Next: cloud rollout,
+real account/device flows and assistive-technology verification.
 
 ## Active checkpoint — home dashboard redesign (2026-10-12)
 

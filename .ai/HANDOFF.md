@@ -10,8 +10,9 @@ mode. Existing records/routes/auth flows are unchanged. Browser reviewed each
 major surface in light/dark; full tests passed 235/236 due only to an old default
 resource-color assertion, then focused unit tests passed 61/61 after updating it.
 Build passes; lint has 0 errors and one existing warning.
-The earlier user instruction to push the work remains outstanding. Stage only
-project work; leave unrelated client/src/**, continue.md and .freebuff artifacts out.
+Committed and pushed as 1d134fb to origin/main. Unrelated client/src/**,
+continue.md and .freebuff artifacts were excluded. Remaining gates are cloud
+rollout, SMTP/auth, real cross-device flows and assistive-technology audit.
 
 ## Latest checkpoint — 2026-10-12, home redesign
 

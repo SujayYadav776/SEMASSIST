@@ -3,7 +3,7 @@
 Last updated: 2026-10-13 (Asia/Colombo)
 
 Source: [PRD v1.1](../SEMASSIST-agent-handoff/PRD.md), dated 2026-10-10.
-Status: phases 2–7 and the local phase-8 skill/release tooling are implemented. Cloud rollout, SMTP/auth, real cross-device flows, and the full assistive-technology audit remain open. No commit, push, or production deployment was performed in this session.
+Status: phases 2–7 and the local phase-8 skill/release tooling are implemented. Cloud rollout, SMTP/auth, real cross-device flows, and the full assistive-technology audit remain open. Project changes were committed and pushed to origin/main as 1d134fb; production deployment was not verified.
 
 ## Updating this checklist
 
@@ -77,8 +77,9 @@ No learner data, routes or account logic changed. Browser checked profile spacin
 Roadmaps library and study view in both themes, the share card, report and 404.
 The full test run passed 235 checks and found one old default-color expectation;
 after updating that assertion, all 61 focused unit checks passed. Final build
-passes and lint has 0 errors/1 existing warning. Next: review the remaining PRD cloud
-rollout gates and push the authorized local work without unrelated shell edits.
+passes and lint has 0 errors/1 existing warning. Commit 1d134fb was pushed
+to origin/main; unrelated shell edits and private previews were excluded. Next:
+review the remaining PRD cloud rollout gates.
 
 ## Preparation already completed
 
@@ -321,3 +322,4 @@ Browser download-event capture stalled, so real UI control exports/restores were
 also verified in jsdom. Full live/assistive-technology gates remain unchecked.
 
 | 2026-10-11 | Remaining local phases 7/8 | Shared backup validator, atomic restore, explicit mappings and schedule history; seven actual PostgreSQL cases, four real library control cases; full 234-test suite and release checks passed. Yellow UI retained. No cloud writes/commit/push. | Owner Supabase/Vercel/SMTP access and reachable service are needed for live deployment, real account/device flows and final accessibility sign-off. |
+| 2026-10-13 | Theme consistency and push | Paper/charcoal styling now covers the remaining profile, detail and Roadmaps surfaces, exports and 404. Browser light/dark review, production build, lint and regression checks completed; commit 1d134fb pushed to origin/main. Unrelated shell edits and private previews excluded. | Cloud rollout, SMTP/auth, cross-device verification and assistive-technology audit remain open. |
