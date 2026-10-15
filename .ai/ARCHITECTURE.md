@@ -251,3 +251,8 @@ Roadmaps backup.ts owns a separate versioned restore contract and shared baselin
 ## Calendar planning interaction (2026-10-15)
 
 workspace-calendar.js owns native drag/drop and a date-picker alternative. Session dates and personal dueDate change in their existing records. Built-in/custom/roadmap checkpoint plans live in the dashboard per-user calendarTaskDates map (date or explicit null), normalized on load and included in existing export/cloud state. These calendar placements are separate from Roadmaps schedule-specific assignment moves; original roadmap dates remain visible in planning controls. Saves preflight storage/account readiness before updating state.
+
+
+## Production root entry (2026-10-15)
+
+The production build runs scripts/finalize-public.mjs after Vite, copying study-dashboard.html to dist/public/index.html. Both / and /study-dashboard.html therefore serve the real static product with identical account layout/assets, independent of hosting rewrite precedence or React shell execution. The development Vite shell still redirects to the static file. Vercel uses npm run build and the existing dist/public output directory.

@@ -2,7 +2,7 @@
 
 ## Active checkpoint — login refresh and production deployment (2026-10-15)
 
-Refreshed the account entry screen with a charcoal workspace introduction, paper account form, shared Heming/DM Sans font roles, palette tokens and responsive stacking. Existing auth IDs and event handling are retained. Production alias semassist.runs-on.dev is confirmed on the linked jain-study-dashboard Vercel project; the prior deployment is an older Ready deployment. User authorized publishing the latest dashboard and login changes. Production build, source/CRLF and 27 focused auth checks pass; lint has 0 errors and its existing warning. Next: publish a clean committed snapshot, then verify production HTML/assets.
+Login/account layout now matches the workspace; 27 focused auth checks and production build pass, and lint reports only its existing warning. First production publish made all latest feature/login assets public (HTTP 200 and source matches), but / continued to serve the Vite shell. The production build now copies the static dashboard to dist/public/index.html so root serves the same account screen directly even when filesystem routing precedes rewrites. Artifact parity verified; publishing the root fix next.
 
 ## Deployment verification — production behind main (2026-10-15)
 

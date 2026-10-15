@@ -14,7 +14,7 @@ and `tests/roadmap-{schema,tools}.test.ts`. Current dashboard imports remain leg
 
 | Entry | What it does |
 | --- | --- |
-| `client/index.html` | Vite HTML shell: meta refresh + `location.replace("/study-dashboard.html")` |
+| `client/index.html` | Vite development shell: meta refresh + `location.replace("/study-dashboard.html")`; production index is replaced by `scripts/finalize-public.mjs` |
 | `client/src/main.tsx` | React bootstrap (dev/build shell only) |
 | `client/src/pages/Home.tsx` | Route `/` — immediately redirects to the static dashboard |
 | `client/public/study-dashboard-boot.js` | Imports `init` and calls it; the module itself does not self-init |
@@ -146,3 +146,5 @@ unrelated client/src workstream still has pre-existing root type errors.
 - supabase/migrations/202610110002_backup_replan.sql and functions/roadmap-account: authenticated account operations, locks, receipts, restore and activation.
 - tests/roadmap-{backup,database,library}.test.ts: contract, actual PostgreSQL/RLS and real library control checks.
 - skills/semassist/SKILL.md, scripts/build-skill.ts: independent skill package; scripts/check-hosting.mjs: production routes and security headers; docs/BACKUP_REPLAN.md: workflows/recovery/deployment.
+
+Production root finalization: `scripts/finalize-public.mjs` (invoked by `npm run build`) copies the product HTML to `dist/public/index.html`; root and explicit dashboard URLs share the same account entry.
