@@ -10,14 +10,27 @@ vi.mock("https://esm.sh/@supabase/supabase-js@2", () => ({ createClient: () => (
 vi.mock("../client/roadmaps/sync", async original => ({ ...await original<object>(), indexedStore: () => ({ list: async () => [], clear: async () => {} }) }));
 let root: Root | undefined;
 afterEach(async () => { if (root) await act(async () => root?.unmount()); root = undefined; vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-async function setup() {
+async function setup(embedded = false, moved = false) {
   const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost:3000/roadmaps.html?demo=1" });
   for (const key of ["window", "document", "navigator", "location", "history", "localStorage", "parent"]) vi.stubGlobal(key, key === "parent" ? { postMessage() {} } : dom.window[key as keyof Window]);
+  const messages = vi.fn();
+  if (embedded) {
+    const parentWindow = { postMessage: messages };
+    Object.defineProperty(dom.window, "parent", { value: parentWindow });
+    vi.stubGlobal("parent", parentWindow);
+  }
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("React", React);
   localStorage.setItem(demoKey, JSON.stringify([{ roadmap_id: fixture.roadmap.roadmapId, archived_at: null }]));
   localStorage.setItem(`${demoKey}:${fixture.roadmap.roadmapId}`, JSON.stringify(fixture));
   localStorage.setItem(`semassist-study-demo-server:${fixture.roadmap.roadmapId}`, JSON.stringify({ records: { [`note:${fixture.content.tasks[0].taskId}`]: { revision: 1, data: { text: "private note" } } } }));
+  if (moved) {
+    const serverKey = `semassist-study-demo-server:${fixture.roadmap.roadmapId}`;
+    const server = JSON.parse(localStorage.getItem(serverKey)!);
+    const assignment = fixture.schedules[0].assignments.find(item => item.taskId === fixture.content.tasks[0].taskId)!;
+    server.records[`assignment:${assignment.assignmentId}`] = { revision: 1, data: { scheduleId: fixture.schedules[0].scheduleId, date: "2026-10-20", overrideReason: "Personal schedule" } };
+    localStorage.setItem(serverKey, JSON.stringify(server));
+  }
   const downloads: Blob[] = [];
   vi.spyOn(URL, "createObjectURL").mockImplementation(blob => { downloads.push(blob as Blob); return "blob:test"; });
   vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
@@ -27,8 +40,20 @@ async function setup() {
   root = createRoot(document.getElementById("root")!);
   await act(async () => root!.render(createElement(RoadmapLibrary)));
   async function click(text: string) { const button = [...document.querySelectorAll("button")].find(b => b.textContent === text)!; expect(button).toBeDefined(); await act(async () => { button.click(); await new Promise(r => setTimeout(r, 30)); }); }
-  return { dom, downloads, click };
+  return { dom, downloads, click, messages };
 }
+
+it("projects searchable roadmap content and effective calendar dates to the authenticated dashboard", async () => {
+  const { messages } = await setup(true, true);
+  await vi.waitFor(() => expect(messages.mock.calls.some(([data]) => data.type === "semassist-roadmaps-tracks" && data.tracks.length)).toBe(true));
+  const projection = messages.mock.calls.find(([data]) => data.type === "semassist-roadmaps-tracks" && data.tracks.length)![0];
+  expect(projection.accountId).toBe("demo");
+  expect(projection.tracks[0].tasks[0].date).toBe("2026-10-20");
+  expect(projection.tracks[0].tasks[0].searchText).toContain(fixture.content.tasks[0].instructions);
+  expect(projection.tracks[0].searchEntries).toContainEqual(expect.objectContaining({ kind: "Roadmap topic", title: fixture.content.topics[0].title, view: "roadmap" }));
+  for (const resource of fixture.content.resources) expect(projection.tracks[0].searchEntries).toContainEqual(expect.objectContaining({ kind: "Roadmap resource", title: resource.title, view: "resources" }));
+  expect(JSON.stringify(projection)).not.toContain("private note");
+});
 it("downloads private backups and notes-free replans through the real library controls", async () => {
   const { downloads, click } = await setup();
   await click("Back up account");

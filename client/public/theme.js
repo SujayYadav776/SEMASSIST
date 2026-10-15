@@ -9,6 +9,7 @@
 
   var STORAGE_KEY = "sem-assist-theme";
   var LEGACY_KEY = "sem-assist-404-theme";
+  var preferenceOverride = null;
   var root = document.documentElement;
   var themeColorMetas = Array.prototype.slice.call(
     document.querySelectorAll('meta[name="theme-color"]')
@@ -39,6 +40,7 @@
     root.setAttribute("data-theme", theme);
     setThemeColor(theme);
     updateToggleButton(theme);
+    document.dispatchEvent(new CustomEvent("semassist-theme-change"));
   }
 
   function readPreference() {
@@ -70,6 +72,7 @@
   }
 
   function hasSavedPreference() {
+    if (preferenceOverride !== null) return preferenceOverride !== "system";
     try {
       var v = localStorage.getItem(STORAGE_KEY);
       return v === "light" || v === "dark";
@@ -79,6 +82,26 @@
   }
 
   applyTheme(readPreference());
+
+  window.SemAssistTheme = {
+    getPreference: function () {
+      if (preferenceOverride !== null) return preferenceOverride;
+      try { var value = localStorage.getItem(STORAGE_KEY); return value === "light" || value === "dark" ? value : "system"; }
+      catch (error) { return "system"; }
+    },
+    setPreference: function (mode) {
+      if (["system", "light", "dark"].indexOf(mode) === -1) return false;
+      var saved = true;
+      preferenceOverride = mode;
+      try {
+        if (mode === "system") { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(LEGACY_KEY); }
+        else localStorage.setItem(STORAGE_KEY, mode);
+      } catch (error) { saved = false; }
+      var resolved = mode === "system" ? (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : mode;
+      applyTheme(resolved);
+      return saved;
+    }
+  };
 
   document.addEventListener("DOMContentLoaded", function () {
     var btn = document.querySelector("[data-theme-toggle]");
@@ -90,12 +113,7 @@
     btn.addEventListener("click", function () {
       var current = root.getAttribute("data-theme") === "dark" ? "dark" : "light";
       var next = current === "dark" ? "light" : "dark";
-      try {
-        localStorage.setItem(STORAGE_KEY, next);
-      } catch (e) {
-        /* storage unavailable — the choice still applies for this visit */
-      }
-      applyTheme(next);
+      window.SemAssistTheme.setPreference(next);
     });
   });
 
@@ -115,8 +133,8 @@
   // Sync across open tabs/pages of the same origin: toggling on one page
   // updates the other immediately.
   window.addEventListener("storage", function (e) {
-    if (e.key !== STORAGE_KEY) return;
-    var v = e.newValue;
-    if (v === "light" || v === "dark") applyTheme(v);
+    if (e.key !== STORAGE_KEY && e.key !== null) return;
+    preferenceOverride = null;
+    applyTheme(readPreference());
   });
 })();

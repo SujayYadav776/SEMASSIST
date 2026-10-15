@@ -1,5 +1,12 @@
 # SEM ASSIST — Agent Handoff
 
+> This file is the canonical long-form handoff for the project. A compact agent-memory
+> layer sits alongside it: `AGENTS.md` (instructions + startup protocol), `.ai/ARCHITECTURE.md`
+> (boundaries and flows), `docs/CODEBASE_MAP.md` (where to look for a given task),
+> `.ai/DECISIONS.md` (why things are the way they are), and `.ai/CURRENT_TASK.md` /
+> `.ai/HANDOFF.md` (what is in flight right now). Read those first; come back here for the
+> detail behind any of them.
+
 ## Project status
 
 This is a Vite/React project, but the user-facing product is currently a self-contained dashboard at `client/public/study-dashboard.html`. `client/src/pages/Home.tsx` immediately redirects the root React route to that static page. For feature work on the dashboard, edit the static HTML file rather than the React components.
@@ -25,7 +32,7 @@ Git is fully usable: the repository lives at `github.com/SujayYadav776/SEMASSIST
 
 ### Checkpoints
 
-The `tracks` array in `study-dashboard.html` defines all standard checkpoint tracks:
+The `tracks` array in `client/public/study-dashboard.js` (defined near the top of the file, and re-exported for the tests) defines all standard checkpoint tracks:
 
 - Python
 - 30 Days of Python

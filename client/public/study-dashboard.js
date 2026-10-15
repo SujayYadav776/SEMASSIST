@@ -1,5 +1,9 @@
+import { initWorkspaceProgress } from "./workspace-progress.js";
+import { initWorkspaceSettings } from "./workspace-settings.js";
+import { initWorkspaceCalendar, normalizeCalendarEvents, normalizeCalendarTaskDates, validCalendarDate } from "./workspace-calendar.js";
 // The Supabase client is created lazily via ensureSupabase() (dynamic import), so this
 // module can also be imported in a Node test environment without fetching esm.sh.
+import { TRACK_ICONS } from "./learning-track-icons.js";
 const STORAGE_KEY = "aster-study-dashboard-v3";
 const LEGACY_KEY = "mission-cs-study-dashboard-v1";
 const COOKIE_CONSENT_KEY = "semassist-cookie-consent";
@@ -380,12 +384,19 @@ let keyboardCursorId = null;
 let journalMinutes = 0;
 let currentState = null;
 let currentUser = null;
+let roadmapTracks = [];
 let inspectedTrackId = "python";
 let saveTimer = null;
 let currentAccessToken = null;
 let stateDirty = false;
 let cloudSaveFailed = false;
 const taskId = (track, index) => `${track.id}-${index + 1}`;
+function openRoadmap(id, view = "overview", task = "") {
+  const frame = document.getElementById("roadmapsFrame");
+  const roadmapId = roadmapTracks.find(track => track.id === id)?.roadmapId || id;
+  openWorkspaceSection("roadmaps");
+  frame?.contentWindow?.postMessage({ type: "semassist-dashboard-open-roadmap", roadmap: roadmapId, view, task }, window.location.origin);
+}
 const dateKey = date => {
   const local = new Date(date);
   local.setMinutes(local.getMinutes() - local.getTimezoneOffset());
@@ -394,16 +405,50 @@ const dateKey = date => {
 const todayKey = () => dateKey(new Date());
 const CHECKPOINT_POINTS = 10;
 const SEMESTER_WEEKS = 16;
-const PROFILE_PLACEHOLDER_NAME = "[yourname]";
+const PROFILE_DEFAULT_NAME = "Sujay";
 function profileDisplayName(state) {
   const name = String(state?.profileName || "").trim();
-  return name || PROFILE_PLACEHOLDER_NAME;
-}
-function profileHasName(state) {
-  return Boolean(String(state?.profileName || "").trim());
+  return name || PROFILE_DEFAULT_NAME;
 }
 function profileDisplaySemester(state) {
   return String(state?.profileSemester || "").trim();
+}
+function allLearningTracks(state = loadState()) {
+  return [...tracks, ...(state?.learningTracks || [])];
+}
+function normalizeLearningTracks(value) {
+  if (!Array.isArray(value)) return [];
+  const ids = new Set();
+  return value.slice(0, 50).filter(track => {
+    if (!track || typeof track.id !== "string" || !/^custom-track-[a-z0-9-]{1,64}$/.test(track.id) || ids.has(track.id) || !String(track.name || "").trim() || !Array.isArray(track.tasks)) return false;
+    ids.add(track.id);
+    return true;
+  }).map(track => ({
+    id: track.id, name: String(track.name).trim().slice(0, 80), subtitle: String(track.subtitle || "Personal learning track").slice(0, 240), color: "#6c7c69",
+    tasks: track.tasks.slice(0, 100).filter(task => Array.isArray(task) && typeof task[0] === "string" && task[0].trim()).map(task => [task[0].trim().slice(0, 240), String(task[1] || "Practice & verify").slice(0, 160)]),
+  }));
+}
+function safeTrackCover(value) {
+  return typeof value === "string" && value.length <= 240000 && /^data:image\/(jpeg|png|webp);base64,[a-z0-9+/=]+$/i.test(value) ? value : "";
+}
+function normalizeTrackSettings(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter(([id, settings]) => /^[a-z0-9:-]{1,100}$/.test(id) && settings && typeof settings === "object").slice(0, 200).map(([id, settings]) => [id, {
+    icon: TRACK_ICONS.some(icon => icon.name === settings.icon) ? settings.icon : "BookOpen",
+    cover: safeTrackCover(settings.cover), showInSidebar: settings.showInSidebar === true,
+  }]));
+}
+function trackAppearance(track, state) {
+  const defaults = { python: "Code", java: "Coffee", os: "Terminal", campusops: "FolderKanban", python30: "BookOpen", algorithms: "Brain" };
+  return state.trackSettings?.[track.id] || { icon: defaults[track.id] || (track.roadmapId ? "Route" : "BookOpen"), cover: "", showInSidebar: ["python", "java", "os", "campusops"].includes(track.id) };
+}
+function trackIcon(name) {
+  const icon = TRACK_ICONS.find(item => item.name === name) || TRACK_ICONS[0];
+  return `<svg class="workspace-icon" viewBox="0 0 24 24" aria-hidden="true">${icon.nodes.map(([tag, attrs]) => `<${tag} ${Object.entries(attrs).map(([key, value]) => `${key}="${escapeHtml(value)}"`).join(" ")}></${tag}>`).join("")}</svg>`;
+}
+function trackArt(track, state, fallback) {
+  const cover = trackAppearance(track, state).cover;
+  return cover ? `<img class="track-cover" src="${escapeHtml(cover)}" alt="" loading="lazy" />` : fallback;
 }
 function defaultState() {
   return {
@@ -411,7 +456,12 @@ function defaultState() {
     completedAt: {},
     activity: {},
     customTasks: [],
+    projects: [],
+    calendarEvents: [],
+    calendarTaskDates: {},
     resources: [],
+    learningTracks: [],
+    trackSettings: {},
     focus: { days: {}, sessions: [] },
     queueFocus: "all",
     reviews: {},
@@ -452,12 +502,30 @@ function migrateLegacy(old) {
   );
   return { completed, completedAt, activity, customTasks: [], resources: [], focus: { days: {}, sessions: [] }, reviews: {} };
 }
+const projectStatuses = { planned: "Planned", active: "In progress", completed: "Completed" };
+function normalizeProjects(projects) {
+  const ids = new Set();
+  return (Array.isArray(projects) ? projects : []).filter(project => {
+    if (!project || typeof project.id !== "string" || !/^project-[a-z0-9-]{1,80}$/.test(project.id) || ids.has(project.id) || typeof project.name !== "string" || !project.name.trim()) return false;
+    ids.add(project.id);
+    return true;
+  }).slice(0, 100).map(project => ({
+    id: project.id, name: project.name.trim().slice(0, 140),
+    description: typeof project.description === "string" ? project.description.trim().slice(0, 300) : "",
+    status: Object.hasOwn(projectStatuses, project.status) ? project.status : "planned",
+  }));
+}
 function normalizeState(state) {
   return {
     ...defaultState(),
     ...state,
     customTasks: Array.isArray(state?.customTasks) ? state.customTasks : [],
+    projects: normalizeProjects(state?.projects),
+    calendarEvents: normalizeCalendarEvents(state?.calendarEvents),
+    calendarTaskDates: normalizeCalendarTaskDates(state?.calendarTaskDates),
     resources: Array.isArray(state?.resources) ? state.resources : [],
+    learningTracks: normalizeLearningTracks(state?.learningTracks),
+    trackSettings: normalizeTrackSettings(state?.trackSettings),
     focus: {
       days:
         state?.focus && typeof state.focus.days === "object" && state.focus.days !== null
@@ -482,7 +550,7 @@ function loadLocalState(userId) {
     if (stored && typeof stored === "object") return normalizeState(stored);
     if (!userId) {
       const old = JSON.parse(localStorage.getItem(LEGACY_KEY));
-      if (old && typeof old === "object") return migrateLegacy(old);
+      if (old && typeof old === "object") return normalizeState(migrateLegacy(old));
     }
   } catch {}
   return defaultState();
@@ -627,7 +695,7 @@ function getStats(state) {
   let total = 0,
     done = 0;
   const byTrack = {};
-  tracks.forEach(track => {
+  allLearningTracks(state).forEach(track => {
     const entries = track.tasks.map((task, index) => ({
       id: taskId(track, index),
       label: task[0],
@@ -639,8 +707,14 @@ function getStats(state) {
     byTrack[track.id] = {
       total: entries.length,
       done: count,
-      percent: Math.round((count / entries.length) * 100),
+      percent: entries.length ? Math.round((count / entries.length) * 100) : 0,
     };
+  });
+  roadmapTracks.forEach(track => {
+    const count = track.tasks.filter(task => task.completed).length;
+    total += track.tasks.length;
+    done += count;
+    byTrack[track.id] = { total: track.tasks.length, done: count, percent: track.tasks.length ? Math.round(count / track.tasks.length * 100) : 0 };
   });
   const customTasks = Array.isArray(state.customTasks) ? state.customTasks : [];
   const customDone = customTasks.filter(task => task.completed).length;
@@ -729,27 +803,32 @@ function renderTracks(state) {
   const openIds = new Set(
     [...container.querySelectorAll(".track-card.open")].map(card => card.id)
   );
+  const hoveringIds = new Set(
+    [...container.querySelectorAll(".track-card.hovering")].map(card => card.id)
+  );
   container.innerHTML = "";
   const stats = getStats(state);
-  tracks.forEach(track => {
+  allLearningTracks(state).forEach(track => {
     const card = document.createElement("article");
     card.className = "track-card wide";
     card.id = track.id;
     card.setAttribute("aria-expanded", openIds.has(track.id) ? "true" : "false");
     if (openIds.has(track.id)) card.classList.add("open");
+    if (hoveringIds.has(track.id)) card.classList.add("hovering");
     card.style.setProperty("--track", track.color);
     const source = track.source
       ? `<a class="source-link" href="${track.source}" target="_blank" rel="noreferrer">${track.sourceLabel || "roadmap.sh ↗"}</a>`
       : "";
     card.innerHTML =
       `<header class="track-head" tabindex="0" title="Click to expand or collapse">` +
-      `<div class="track-name"><i></i><div><h3>${track.name}</h3><p>${track.subtitle}</p></div></div>` +
+      `<div class="track-name"><i></i><div><h3>${escapeHtml(track.name)}</h3><p>${escapeHtml(track.subtitle)}</p></div></div>` +
       `<div class="track-progress">` +
       `<span class="mini-orbit" style="--progress:${stats.byTrack[track.id].percent}%"></span>` +
       `<strong>${stats.byTrack[track.id].done}/${stats.byTrack[track.id].total}</strong>` +
       source +
       `</div></header><div class="task-list"></div>`;
     const list = card.querySelector(".task-list");
+    if (!track.tasks.length) list.innerHTML = `<p class="empty-track-note">No checkpoints yet. <button class="text-action" data-customize-track="${track.id}">Add topics ↗</button></p>`;
     track.tasks.forEach((task, index) => {
       const id = taskId(track, index);
       const checked = Boolean(state.completed[id]);
@@ -759,8 +838,8 @@ function renderTracks(state) {
       label.dataset.track = track.id;
       label.innerHTML =
         `<input class="check" type="checkbox" ${checked ? "checked" : ""} />` +
-        `<span class="task-text">${task[0]}</span>` +
-        `<span class="task-meta">${task[1]}</span>`;
+        `<span class="task-text">${escapeHtml(task[0])}</span>` +
+        `<span class="task-meta">${escapeHtml(task[1])}</span>`;
       label
         .querySelector(".check")
         .addEventListener("change", event =>
@@ -768,6 +847,35 @@ function renderTracks(state) {
         );
       list.appendChild(label);
     });
+    container.appendChild(card);
+  });
+  roadmapTracks.forEach(track => {
+    const done = track.tasks.filter(task => task.completed).length;
+    const card = document.createElement("article");
+    card.className = "track-card wide roadmap-track-card";
+    card.id = `roadmap-track-${track.id}`;
+    card.setAttribute("aria-expanded", openIds.has(card.id) ? "true" : "false");
+    if (openIds.has(card.id)) card.classList.add("open");
+    if (hoveringIds.has(card.id)) card.classList.add("hovering");
+    card.style.setProperty("--track", "#6c7c69");
+    card.innerHTML = `<header class="track-head" tabindex="0" title="Click to expand or collapse"><div class="track-name"><i></i><div><h3>${escapeHtml(track.name)}</h3><p>${escapeHtml(track.subject || "Saved roadmap")}</p></div></div><div class="track-progress"><span class="mini-orbit" style="--progress:${track.tasks.length ? Math.round(done / track.tasks.length * 100) : 0}%"></span><strong>${done}/${track.tasks.length}</strong></div></header><div class="task-list"></div>`;
+    const list = card.querySelector(".task-list");
+    track.tasks.forEach(task => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = `task-row roadmap-task-row${task.completed ? " done" : ""}`;
+      row.dataset.roadmapId = track.id;
+      row.dataset.taskId = task.id;
+      row.innerHTML = `<span class="roadmap-task-state" aria-hidden="true">${task.completed ? "✓" : "○"}</span><span class="task-text">${escapeHtml(task.label)}</span><span class="task-meta">${escapeHtml(task.meta || "Roadmap checkpoint")}</span>`;
+      row.addEventListener("click", () => openRoadmap(track.id));
+      list.appendChild(row);
+    });
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "text-action roadmap-open-action";
+    open.textContent = "Open roadmap ↗";
+    open.addEventListener("click", () => openRoadmap(track.id));
+    list.appendChild(open);
     container.appendChild(card);
   });
   applyFilters();
@@ -898,7 +1006,7 @@ function renderFocusTotals(state) {
     sessions.forEach(session => {
       if (!session || !session.track || !session.date) return;
       if (session.date < mondayKey || session.date > todayKeyValue) return;
-      const track = tracks.find(item => item.id === session.track);
+      const track = allLearningTracks(state).find(item => item.id === session.track);
       if (!track) return;
       byTrack[track.id] =
         (byTrack[track.id] || 0) + (Number(session.minutes) || 0);
@@ -906,7 +1014,7 @@ function renderFocusTotals(state) {
     const parts = Object.entries(byTrack)
       .filter(([, minutes]) => minutes > 0)
       .map(([id, minutes]) => {
-        const track = tracks.find(item => item.id === id);
+        const track = allLearningTracks(state).find(item => item.id === id);
         return `${track ? track.name : id} ${formatMinutes(minutes)}`;
       });
     if (parts.length) text += ` · ${parts.join(" · ")}`;
@@ -919,7 +1027,7 @@ function renderFocusTotals(state) {
 function nextUp(state, focus = "all") {
   const wanted = focus && focus !== "all" ? focus : null;
   const out = [];
-  for (const track of tracks) {
+  for (const track of allLearningTracks(state)) {
     if (wanted && track.id !== wanted) continue;
     for (let index = 0; index < track.tasks.length; index++) {
       const id = taskId(track, index);
@@ -933,42 +1041,41 @@ function nextUp(state, focus = "all") {
       if (out.length === 3) return out;
     }
   }
+  for (const track of roadmapTracks) {
+    if (wanted && track.id !== wanted) continue;
+    for (const task of track.tasks) {
+      if (task.completed) continue;
+      out.push({ id: task.id, roadmapId: track.id, track: { id: track.id, name: track.name, color: "#6c7c69" }, label: task.label, meta: task.meta || "Roadmap checkpoint" });
+      if (out.length === 3) return out;
+    }
+  }
   return out;
 }
 function renderMissionQueue(state) {
   const queue = document.getElementById("missionQueue");
   const select = document.getElementById("queueFocus");
   if (!queue || !select) return;
-  if (!select.options.length) {
-    const option = (value, label) => {
-      const element = document.createElement("option");
-      element.value = value;
-      element.textContent = label;
-      return element;
-    };
-    select.appendChild(option("all", "All tracks"));
-    tracks.forEach(track =>
-      select.appendChild(option(track.id, track.name))
-    );
-  }
+  select.innerHTML = '<option value="all">All tracks</option>' + [...allLearningTracks(state), ...roadmapTracks].map(track => `<option value="${escapeHtml(track.id)}">${escapeHtml(track.name)}</option>`).join("");
   const focus =
-    state.queueFocus && tracks.some(track => track.id === state.queueFocus)
+    state.queueFocus && [...allLearningTracks(state), ...roadmapTracks].some(track => track.id === state.queueFocus)
       ? state.queueFocus
       : "all";
   select.value = focus;
   const upcoming = nextUp(state, focus);
   if (!upcoming.length) {
-    const focusTrack = tracks.find(track => track.id === focus);
-    const message = nextUp(state, "all").length
+    const focusTrack = [...allLearningTracks(state), ...roadmapTracks].find(track => track.id === focus);
+    const message = focusTrack && !focusTrack.tasks.length
+      ? "This track has no checkpoints yet. Add topics on the Learning tracks page."
+      : nextUp(state, "all").length
       ? `${focusTrack ? focusTrack.name : "This track"} is fully verified — switch focus or enjoy the win.`
       : "Every checkpoint verified — the roadmap is complete.";
-    queue.innerHTML = `<div class="queue-empty"><i>✓</i><span>${message}</span></div>`;
+    queue.innerHTML = `<div class="queue-empty"><i>✓</i><span>${escapeHtml(message)}</span></div>`;
     return;
   }
   queue.innerHTML = upcoming
     .map(
       (item, index) =>
-        `<button type="button" class="queue-row" data-qid="${item.id}" data-track="${item.track.id}" style="--qdot:${item.track.color}" title="Verify in ${item.track.name}: ${escapeHtml(item.label)}">` +
+        `<button type="button" class="queue-row" data-qid="${item.id}" data-track="${item.track.id}"${item.roadmapId ? ` data-roadmap-id="${item.roadmapId}"` : ""} style="--qdot:${item.track.color}" title="Open in ${escapeHtml(item.track.name)}: ${escapeHtml(item.label)}">` +
         `<i>${index + 1}</i>` +
         `<span class="queue-main"><b>${escapeHtml(item.label)}</b>` +
         `<small><s></s>${escapeHtml(item.track.name)} · ${escapeHtml(item.meta)}</small></span>` +
@@ -1148,7 +1255,7 @@ async function refreshLeaderboard() {
 // The three most-advanced tracks, shown as the profile's skill badges.
 function topSkills(state) {
   const stats = getStats(state);
-  return [...tracks]
+  return [...allLearningTracks(state)]
     .filter(track => stats.byTrack[track.id].done > 0)
     .sort((a, b) => stats.byTrack[b.id].done - stats.byTrack[a.id].done)
     .slice(0, 3);
@@ -1242,7 +1349,7 @@ function wrapLines(text, maxChars) {
 function buildProfileCardSvg(state) {
   const stats = getStats(state);
   const name = profileDisplayName(state);
-  const avatarGlyph = profileHasName(state) ? name.slice(0, 1) : "+";
+  const avatarGlyph = name.slice(0, 1).toUpperCase();
   const semesterRaw = profileDisplaySemester(state);
   const semester = escapeHtml(semesterRaw);
   const semW = semesterRaw ? 60 + semesterRaw.length * 16 : 0;
@@ -1484,25 +1591,19 @@ function animateWelcomeText(element, text) {
 }
 function renderProfile(state) {
   const stats = getStats(state);
-  const hasName = profileHasName(state);
   const name = profileDisplayName(state);
   const avatar = document.getElementById("profileAvatar");
-  if (avatar) avatar.textContent = hasName ? name.slice(0, 1).toUpperCase() : "+";
+  if (avatar) avatar.textContent = name.slice(0, 1).toUpperCase();
   const nameRow = document.getElementById("profileNameRow");
   if (nameRow) {
     nameRow.innerHTML =
-      `<h2 class="profile-name${hasName ? "" : " placeholder"}"${
-        hasName ? "" : ' data-edit-name title="Click to add your name"'
-      }>${escapeHtml(name)}</h2>` +
+      `<h2 class="profile-name">${escapeHtml(name)}</h2>` +
       `<button class="profile-edit" data-edit-name type="button" aria-label="Edit name" title="Edit name">✎</button>`;
   }
   const headline = document.getElementById("welcomeHeadline");
   if (headline) {
-    const placeholderGreeting = !String(state.profileName || "").trim();
-    const greetingText = placeholderGreeting ? "[yourname]." : `${name}.`;
-    headline.innerHTML = placeholderGreeting
-      ? `Welcome in, <em class="welcome-name placeholder" data-edit-name title="Click to add your name">[yourname].</em>`
-      : `Welcome in, <em>${escapeHtml(name)}.</em>`;
+    const greetingText = `${name}.`;
+    headline.innerHTML = `Welcome in, <em>${escapeHtml(name)}.</em>`;
     animateWelcomeText(headline.querySelector("em"), greetingText);
   }
   const badges = document.getElementById("profileBadges");
@@ -1597,8 +1698,8 @@ function editProfileName() {
   const input = document.createElement("input");
   input.className = "profile-name-input";
   input.maxLength = 30;
-  input.placeholder = "yourname";
-  input.value = String(loadState().profileName || "");
+  input.placeholder = "Sujay";
+  input.value = profileDisplayName(loadState());
   input.setAttribute("aria-label", "Name");
   row.innerHTML = "";
   row.appendChild(input);
@@ -1643,12 +1744,12 @@ function updateSummary(state) {
           stats.byTrack[node.dataset.headPercent].percent + "%")
     );
   const trackSummary = document.getElementById("trackSummary");
-  trackSummary.innerHTML = tracks
+  trackSummary.innerHTML = allLearningTracks(state)
     .map(track => {
       const item = stats.byTrack[track.id];
       return (
         `<div class="track-row" style="--track:${track.color}">` +
-        `<i></i><span>${track.name}</span>` +
+        `<i></i><span>${escapeHtml(track.name)}</span>` +
         `<strong>${item.done}/${item.total}</strong>` +
         `<div class="mini-line"><span style="width:${item.percent}%"></span></div>` +
         `</div>`
@@ -1660,11 +1761,17 @@ function updateSummary(state) {
   renderWeeklyProgress(state);
   renderActivity(state);
   renderCustomTasks(state);
+  renderProjects(state);
+  workspaceCalendar?.render();
+  workspaceProgress?.render();
   renderMissionQueue(state);
   renderReviewQueue(state);
   renderResources(state);
   renderProfile(state);
   renderHomeWorkspace(state);
+  renderLearningPage(state);
+  renderTrackNavigation(state);
+  renderSearchResults(state);
 }
 // The home view is a projection of existing study data; it owns no persistence.
 function renderHomeWorkspace(state) {
@@ -1677,14 +1784,13 @@ function renderHomeWorkspace(state) {
     const element = document.getElementById(id);
     if (element) element.textContent = value;
   };
-  setText("workspaceDate", today.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) + " · " + today.toLocaleDateString("en-GB", { weekday: "long" }));
-  document.getElementById("workspaceDate").dateTime = day;
   setText("homeDay", String(today.getDate()).padStart(2, "0"));
   setText("homeWeekday", today.toLocaleDateString("en-GB", { weekday: "long" }));
   setText("homeMonth", today.toLocaleDateString("en-GB", { month: "long", year: "numeric" }));
   setText("homeSemester", state.profileSemester || "Your semester workspace");
+  setText("homeTrackCount", String(allLearningTracks(state).length + roadmapTracks.length).padStart(2, "0"));
   setText("homePersonal", state.customTasks.filter(task => !task.completed).length);
-  setText("homeReview", tracks.reduce((sum, track) => sum + track.tasks.filter((_, index) => reviewDue(state, taskId(track, index)) !== null).length, 0));
+  setText("homeReview", allLearningTracks(state).reduce((sum, track) => sum + track.tasks.filter((_, index) => reviewDue(state, taskId(track, index)) !== null).length, 0));
   setText("homeToday", Number(state.activity[day]) || 0);
   setText("sidebarCheckpoints", `${stats.done} / ${stats.total}`);
   setText("homeProgressLabel", `${stats.done} of ${stats.total} checkpoints verified`);
@@ -1709,22 +1815,316 @@ function renderHomeWorkspace(state) {
     os: '<span class="art-caption">System / process</span><div class="process-diagram"><span>User process</span><br />↓ syscall<br /><span>Linux kernel</span><br />↓<br />CPU · memory · files</div>',
     campusops: '<span class="art-caption">Project / architecture</span><div class="project-diagram"><span>Java<br />domain</span><span>Python<br />tools</span><span>Linux environment</span></div>',
   };
-  gallery.innerHTML = tracks.filter(track => art[track.id]).map(track => {
+  gallery.innerHTML = allLearningTracks(state).map(track => {
     const progress = stats.byTrack[track.id];
-    return `<button class="learning-card" data-inspect-track="${track.id}" aria-pressed="${track.id === inspectedTrackId}" aria-label="Inspect ${escapeHtml(track.name)} track"><div class="learning-art art-${track.id}" aria-hidden="true">${art[track.id]}</div><div class="learning-card-copy"><h3>${escapeHtml(track.name)}</h3><dl><div><dt>Type</dt><dd>${track.id === "campusops" ? "Project" : "Learning track"}</dd></div><div><dt>Status</dt><dd>${progress.done === progress.total ? "Verified" : progress.done ? "In progress" : "Ready to begin"}</dd></div><div><dt>Progress</dt><dd>${progress.done} / ${progress.total} verified</dd></div></dl></div></button>`;
+    const cardArt = art[track.id] || `<span class="art-caption">${escapeHtml(track.subtitle)}</span><strong>${String(progress.percent).padStart(2, "0")}%</strong><span>${track.tasks.length} checkpoints</span>`;
+    return `<button class="learning-card" data-inspect-track="${track.id}" aria-pressed="${track.id === inspectedTrackId}" aria-label="Inspect ${escapeHtml(track.name)} track"><div class="learning-art art-${track.id}${art[track.id] ? "" : " roadmap-learning-art"}" aria-hidden="true">${trackArt(track, state, cardArt)}</div><div class="learning-card-copy"><h3>${trackIcon(trackAppearance(track, state).icon)}${escapeHtml(track.name)}</h3><dl><div><dt>Type</dt><dd>${track.id === "campusops" ? "Project" : "Learning track"}</dd></div><div><dt>Status</dt><dd>${progress.total > 0 && progress.done === progress.total ? "Verified" : progress.done ? "In progress" : "Ready to begin"}</dd></div><div><dt>Progress</dt><dd>${progress.done} / ${progress.total} verified</dd></div></dl></div></button>`;
+  }).join("") + roadmapTracks.map(track => {
+    const done = track.tasks.filter(task => task.completed).length;
+    const percent = track.tasks.length ? Math.round(done / track.tasks.length * 100) : 0;
+    return `<button class="learning-card roadmap-learning-card" data-roadmap-open="${escapeHtml(track.id)}" aria-label="Open ${escapeHtml(track.name)} roadmap"><div class="learning-art roadmap-learning-art" aria-hidden="true">${trackArt(track, state, `<span class="art-caption">${escapeHtml(track.subject || "Saved roadmap")}</span><strong>${String(percent).padStart(2, "0")}%</strong><span>${track.tasks.length} checkpoints</span>`)}</div><div class="learning-card-copy"><h3>${trackIcon(trackAppearance(track, state).icon)}${escapeHtml(track.name)}</h3><dl><div><dt>Type</dt><dd>Roadmap track</dd></div><div><dt>Status</dt><dd>${done === track.tasks.length ? "Verified" : done ? "In progress" : "Ready to begin"}</dd></div><div><dt>Progress</dt><dd>${done} / ${track.tasks.length} verified</dd></div></dl></div></button>`;
   }).join("");
-  const track = tracks.find(item => item.id === inspectedTrackId) || tracks[0];
+
+  const track = allLearningTracks(state).find(item => item.id === inspectedTrackId) || tracks[0];
   const progress = stats.byTrack[track.id];
   const next = nextUp(state, track.id)[0];
-  document.getElementById("homeInspector").innerHTML = `<div class="inspector-record"><div class="record-id"><small>Track record</small><strong>TRK-${String(tracks.indexOf(track) + 1).padStart(3, "0")}<span class="record-barcode" aria-hidden="true"></span></strong></div><dl class="record-meta"><div><dt>Type</dt><dd>${track.id === "campusops" ? "Semester project" : "Learning track"}</dd></div><div><dt>Status</dt><dd>${progress.done === progress.total ? "Verified" : progress.done ? "In progress" : "Ready to begin"}</dd></div></dl><div class="record-title"><h3>${escapeHtml(track.name)}</h3><p>${escapeHtml(track.subtitle)}</p></div><div class="record-details"><h4>Next checkpoint</h4><p>${next ? escapeHtml(next.label) : "All checkpoints verified. Revisit your evidence in a review session."}</p><div class="record-tags"><span>${track.tasks.length} checkpoints</span><span>${track.id === "campusops" ? "Build & document" : "Practice & verify"}</span></div><h4>Progress</h4><div class="record-progress"><div class="record-orbit" style="--progress:${progress.percent}%"><strong>${progress.percent}%</strong></div><div>${progress.done} verified<br />${progress.total - progress.done} remaining<small>Evidence before completion</small></div></div><div class="record-actions"><button class="workspace-button" data-open-track="${track.id}">Open checkpoints ↗</button>${track.source ? `<a class="workspace-button" href="${escapeHtml(track.source)}" target="_blank" rel="noreferrer">Open source ↗</a>` : ""}</div></div></div>`;
+  document.getElementById("homeInspector").innerHTML = `<div class="inspector-record"><div class="record-id"><small>Track record</small><strong>TRK-${String(allLearningTracks(state).indexOf(track) + 1).padStart(3, "0")}<span class="record-barcode" aria-hidden="true"></span></strong></div><dl class="record-meta"><div><dt>Type</dt><dd>${track.id === "campusops" ? "Semester project" : "Learning track"}</dd></div><div><dt>Status</dt><dd>${progress.total > 0 && progress.done === progress.total ? "Verified" : progress.done ? "In progress" : "Ready to begin"}</dd></div></dl><div class="record-title"><h3>${escapeHtml(track.name)}</h3><p>${escapeHtml(track.subtitle)}</p></div><div class="record-details"><h4>Next checkpoint</h4><p>${next ? escapeHtml(next.label) : track.tasks.length ? "All checkpoints verified. Revisit your evidence in a review session." : "Add topics on the Learning tracks page to start studying."}</p><div class="record-tags"><span>${track.tasks.length} checkpoints</span><span>${track.id === "campusops" ? "Build & document" : "Practice & verify"}</span></div><h4>Progress</h4><div class="record-progress"><div class="record-orbit" style="--progress:${progress.percent}%"><strong>${progress.percent}%</strong></div><div>${progress.done} verified<br />${progress.total - progress.done} remaining<small>Evidence before completion</small></div></div><div class="record-actions"><button class="workspace-button" data-open-track="${track.id}">Open checkpoints ↗</button>${track.source ? `<a class="workspace-button" href="${escapeHtml(track.source)}" target="_blank" rel="noreferrer">Open source ↗</a>` : ""}</div></div></div>`;
   const sessions = (Array.isArray(state.focus.sessions) ? state.focus.sessions : []).filter(session => session && typeof session.date === "string");
   const last = sessions.at(-1);
   setText("homeDailyNote", last ? `${last.note || "Focus session recorded"} · ${formatMinutes(last.minutes)} · ${last.date}` : "Start a focus session. Your study note will appear here.");
   document.getElementById("homeDailyNote").title = last?.note || "";
 }
+let trackDraftCover = "";
+let trackCoverError = "";
+let trackUploadSequence = 0;
+let trackEditorOwner;
+function setTrackIcon(name) {
+  document.getElementById("trackIcon").value = name;
+  document.querySelectorAll("[data-track-icon]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.trackIcon === name)));
+}
+function updateTrackCoverPreview() {
+  const preview = document.getElementById("trackCoverPreview");
+  preview.hidden = !trackDraftCover;
+  if (trackDraftCover) preview.src = trackDraftCover;
+  else preview.removeAttribute("src");
+}
+function resetLearningEditor() {
+  const form = document.getElementById("learningTrackForm");
+  if (!form) return;
+  form.reset();
+  delete form.dataset.editId;
+  trackDraftCover = "";
+  trackCoverError = "";
+  trackUploadSequence++;
+  setTrackIcon("BookOpen");
+  updateTrackCoverPreview();
+  document.getElementById("trackTopicsField").hidden = false;
+  document.getElementById("trackTopics").required = false;
+  document.getElementById("trackTopicsLabel").textContent = "Topics / checkpoints — one per line (optional)";
+  document.getElementById("trackName").readOnly = false;
+  document.getElementById("trackDescription").readOnly = false;
+  document.getElementById("trackFormTitle").textContent = "Add a learning track";
+  document.getElementById("trackFormMessage").textContent = "";
+  const submit = document.getElementById("trackSubmit");
+  submit.disabled = false;
+  submit.textContent = "Create track";
+}
+function renderLearningPage(state) {
+  const manager = document.getElementById("learningTrackList");
+  if (!manager) return;
+  const owner = currentUser?.id || "guest";
+  if (trackEditorOwner !== owner) { trackEditorOwner = owner; resetLearningEditor(); }
+  manager.innerHTML = [...allLearningTracks(state), ...roadmapTracks].map(track => {
+    const settings = trackAppearance(track, state);
+    return `<article class="managed-track"><div class="managed-track-art">${trackArt(track, state, trackIcon(settings.icon))}</div><div class="managed-track-copy"><h3>${escapeHtml(track.name)}</h3><p>${escapeHtml(track.subtitle || track.subject || "Saved roadmap")} · ${track.tasks.length} checkpoints</p><div class="managed-track-actions"><button class="workspace-button" data-customize-track="${escapeHtml(track.id)}">Customize</button><button class="text-action" ${track.roadmapId ? `data-roadmap-open="${escapeHtml(track.id)}"` : `data-open-track="${escapeHtml(track.id)}"`}>Open track ↗</button></div><label class="track-nav-choice"><input type="checkbox" data-track-sidebar="${escapeHtml(track.id)}" ${settings.showInSidebar ? "checked" : ""} /> Show in sidebar</label></div></article>`;
+  }).join("");
+  document.getElementById("learningTrackTotal").textContent = `${allLearningTracks(state).length + roadmapTracks.length} tracks`;
+}
+function renderTrackNavigation(state) {
+  const nav = document.getElementById("trackNavigation");
+  if (!nav) return;
+  const active = document.querySelector(".nav-button.active")?.dataset.scroll;
+  nav.innerHTML = [...allLearningTracks(state), ...roadmapTracks].filter(track => trackAppearance(track, state).showInSidebar).map(track => `<button class="nav-button${active === track.id ? " active" : ""}"${active === track.id ? ' aria-current="page"' : ""} ${track.roadmapId ? `data-roadmap-open="${escapeHtml(track.id)}"` : `data-scroll="${escapeHtml(track.id)}"`}>${trackIcon(trackAppearance(track, state).icon)}<span>${escapeHtml(track.name)}</span></button>`).join("");
+}
+function persistLearningState(state) {
+  if (sessionApplyPromise) {
+    document.getElementById("trackFormMessage").textContent = "Your account is still loading. Try saving again in a moment.";
+    return false;
+  }
+  try {
+    localStorage.setItem(storageKeyForUser(currentUser?.id), JSON.stringify(state));
+  } catch {
+    document.getElementById("trackFormMessage").textContent = "Browser storage is full. Export a backup or choose a smaller cover, then retry.";
+    showToast("Track changes could not be saved.");
+    return false;
+  }
+  saveState(state);
+  renderTracks(state);
+  updateSummary(state);
+  return true;
+}
+function customizeLearningTrack(id) {
+  const state = loadState();
+  const track = [...allLearningTracks(state), ...roadmapTracks].find(item => item.id === id);
+  if (!track) return;
+  if (document.body.dataset.workspacePage !== "learning") openWorkspaceSection("learning");
+  resetLearningEditor();
+  const form = document.getElementById("learningTrackForm");
+  form.dataset.editId = id;
+  document.getElementById("trackName").value = track.name;
+  document.getElementById("trackDescription").value = track.subtitle || track.subject || "";
+  const personal = state.learningTracks.some(item => item.id === id);
+  document.getElementById("trackName").readOnly = !personal;
+  document.getElementById("trackDescription").readOnly = !personal;
+  document.getElementById("trackTopicsField").hidden = !personal;
+  document.getElementById("trackTopicsLabel").textContent = "Add checkpoints — one per line (existing checkpoints are kept)";
+  document.getElementById("trackTopics").required = false;
+  const appearance = trackAppearance(track, state);
+  setTrackIcon(appearance.icon);
+  trackDraftCover = appearance.cover;
+  updateTrackCoverPreview();
+  document.getElementById("trackShowSidebar").checked = appearance.showInSidebar;
+  document.getElementById("trackFormTitle").textContent = `Customize ${track.name}`;
+  document.getElementById("trackSubmit").textContent = "Save appearance";
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.getElementById("trackCover").focus({ preventScroll: true });
+}
+function submitLearningTrack(event) {
+  event.preventDefault();
+  if (trackCoverError) { document.getElementById("trackFormMessage").textContent = trackCoverError; return; }
+  const form = document.getElementById("learningTrackForm");
+  if (!form.checkValidity() || document.getElementById("trackSubmit").disabled) return;
+  const editing = Boolean(form.dataset.editId);
+  const state = loadState();
+  const id = form.dataset.editId || `custom-track-${crypto.randomUUID()}`;
+  const next = { ...state, learningTracks: [...state.learningTracks], trackSettings: { ...state.trackSettings } };
+  const personal = next.learningTracks.find(track => track.id === id);
+  const name = document.getElementById("trackName").value.trim();
+  const topics = document.getElementById("trackTopics").value.split(/\r?\n/).map(topic => topic.trim()).filter(Boolean);
+  if (!name || (personal?.tasks.length || 0) + topics.length > 100 || topics.some(topic => topic.length > 240) || (!editing && state.learningTracks.length >= 50)) {
+    document.getElementById("trackFormMessage").textContent = "Enter a name and up to 100 checkpoints (up to 240 characters each). You can save up to 50 personal tracks.";
+    return;
+  }
+  if (!editing || personal) {
+    const value = { id, name, subtitle: document.getElementById("trackDescription").value.trim() || "Personal learning track", color: "#6c7c69", tasks: [...(personal?.tasks || []), ...topics.map(topic => [topic, "Practice & verify"])] };
+    if (personal) next.learningTracks = next.learningTracks.map(track => track.id === id ? value : track);
+    else next.learningTracks.push(value);
+  }
+  next.trackSettings[id] = { icon: document.getElementById("trackIcon").value, cover: trackDraftCover, showInSidebar: document.getElementById("trackShowSidebar").checked };
+  if (!persistLearningState(next)) return;
+  resetLearningEditor();
+  document.getElementById("trackFormMessage").textContent = editing ? "Appearance saved." : "Track saved. It is available on the dashboard and in Study checkpoints.";
+}
+async function readTrackCover(file) {
+  if (!file || !["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Choose a PNG, JPEG or WebP image.");
+  if (file.size > 5 * 1024 * 1024) throw new Error("Choose an image smaller than 5 MB.");
+  const data = await new Promise((resolve, reject) => {
+    const reader = new window.FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("This image could not be read. Try another file."));
+    reader.readAsDataURL(file);
+  });
+  const image = await new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("This image could not be opened. Try another file."));
+    img.src = data;
+  });
+  if (!image.naturalWidth || !image.naturalHeight) throw new Error("This image has no usable dimensions.");
+  const scale = Math.min(1, 720 / image.naturalWidth, 480 / image.naturalHeight);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Image upload is unavailable in this browser.");
+  context.fillStyle = "#e8e2d2";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const cover = canvas.toDataURL("image/jpeg", 0.78);
+  if (!safeTrackCover(cover)) throw new Error("This cover is too large to save. Choose a simpler or smaller image.");
+  return cover;
+}
+function initLearningPage() {
+  document.getElementById("trackIconPicker").innerHTML = TRACK_ICONS.map(icon => `<button type="button" data-track-icon="${icon.name}" aria-label="${icon.label}" title="${icon.label}" aria-pressed="false">${trackIcon(icon.name)}<span>${icon.label}</span></button>`).join("");
+  document.getElementById("trackIconPicker").addEventListener("click", event => {
+    const button = event.target.closest("[data-track-icon]");
+    if (button) setTrackIcon(button.dataset.trackIcon);
+  });
+  document.getElementById("learningTrackForm").addEventListener("submit", submitLearningTrack);
+  document.getElementById("trackCancel").addEventListener("click", resetLearningEditor);
+  document.getElementById("trackRemoveCover").addEventListener("click", () => {
+    trackUploadSequence++;
+    trackDraftCover = "";
+    trackCoverError = "";
+    document.getElementById("trackCover").value = "";
+    document.getElementById("trackSubmit").disabled = false;
+    document.getElementById("trackFormMessage").textContent = "";
+    updateTrackCoverPreview();
+  });
+  document.getElementById("trackCover").addEventListener("change", async event => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const sequence = ++trackUploadSequence;
+    const submit = document.getElementById("trackSubmit");
+    submit.disabled = true;
+    document.getElementById("trackFormMessage").textContent = "Preparing cover…";
+    try {
+      const cover = await readTrackCover(file);
+      if (sequence !== trackUploadSequence) return;
+      trackDraftCover = cover;
+      trackCoverError = "";
+      updateTrackCoverPreview();
+      document.getElementById("trackFormMessage").textContent = "Cover ready. Save the track to keep it.";
+    } catch (error) {
+      if (sequence !== trackUploadSequence) return;
+      trackCoverError = error.message;
+      document.getElementById("trackFormMessage").textContent = trackCoverError;
+    } finally { if (sequence === trackUploadSequence) submit.disabled = false; }
+  });
+  document.getElementById("learningTrackList").addEventListener("change", event => {
+    const id = event.target.dataset.trackSidebar;
+    if (!id) return;
+    const state = loadState();
+    const track = [...allLearningTracks(state), ...roadmapTracks].find(item => item.id === id);
+    if (!track) return;
+    const next = { ...state, trackSettings: { ...state.trackSettings, [id]: { ...trackAppearance(track, state), showInSidebar: event.target.checked } } };
+    if (!persistLearningState(next)) event.target.checked = !event.target.checked;
+  });
+}
+function workspaceSearchEntries(state) {
+  const entries = [];
+  for (const track of allLearningTracks(state)) {
+    entries.push({ kind: "Track", title: track.name, text: track.subtitle, target: track.id });
+    track.tasks.forEach((task, index) => entries.push({ kind: "Checkpoint", title: task[0], text: `${track.name} · ${task[1]}`, target: track.id, checkpoint: taskId(track, index) }));
+  }
+  for (const track of roadmapTracks) {
+    entries.push({ kind: "Roadmap", title: track.name, text: track.subject, roadmap: track.id });
+    track.tasks.forEach(task => entries.push({ kind: "Roadmap task", title: task.label, text: `${track.name} · ${task.meta} · ${task.searchText || ""}`, roadmap: track.id, task: task.sourceTaskId }));
+    for (const item of track.searchEntries || []) entries.push({ kind: item.kind, title: item.title, text: `${track.name} · ${item.text}`, roadmap: track.id, view: item.view });
+  }
+  for (const resource of state.resources) entries.push({ kind: "Resource", title: resource.name, text: `${resource.description || ""} · ${resource.url || ""}`, target: "resources" });
+  for (const task of state.customTasks) entries.push({ kind: "Personal task", title: task.label || task.text || task.title || "Personal task", text: `${task.due || ""} ${task.cadence || ""}`, target: "custom" });
+  for (const event of state.calendarEvents) entries.push({ kind: "Study session", title: event.title, text: `${event.date} · ${event.notes}`, target: "calendar", calendarDate: event.date });
+  for (const project of state.projects) entries.push({ kind: "Project", title: project.name, text: `${project.description} · ${projectStatuses[project.status]}`, target: "projects" });
+  for (const session of state.focus.sessions) if (session.note) entries.push({ kind: "Focus note", title: session.note, text: `${session.date} · ${allLearningTracks(state).find(track => track.id === session.track)?.name || "General study"}`, target: "activity" });
+  return entries;
+}
+function renderSearchResults(state = loadState()) {
+  const input = document.getElementById("workspaceSearch");
+  const results = document.getElementById("workspaceSearchResults");
+  if (!input || !results) return;
+  const query = input.value.trim().toLocaleLowerCase();
+  results.innerHTML = "";
+  const status = document.getElementById("workspaceSearchStatus");
+  if (!query) { status.textContent = "Search tracks, topics, checkpoints, roadmap instructions, resources, tasks and focus notes."; return; }
+  const words = query.split(/\s+/);
+  const matches = workspaceSearchEntries(state).filter(entry => words.every(word => `${entry.title} ${entry.text}`.toLocaleLowerCase().includes(word)));
+  status.textContent = matches.length ? `${matches.length} results${matches.length > 80 ? " · showing the first 80; refine your search for more" : ""}` : "No matches. Try a topic, track name, instruction or resource.";
+  matches.slice(0, 80).forEach(entry => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "workspace-search-result";
+    button.innerHTML = `<small>${escapeHtml(entry.kind)}</small><strong>${escapeHtml(entry.title)}</strong><span>${escapeHtml(String(entry.text || "").slice(0, 260))}</span>`;
+    button.addEventListener("click", () => {
+      if (entry.roadmap) openRoadmap(entry.roadmap, entry.view || "overview", entry.task || "");
+      else {
+        if (allLearningTracks(state).some(track => track.id === entry.target)) {
+          activeFilter = "all";
+          document.getElementById("search").value = "";
+          document.querySelectorAll(".filter").forEach(filter => filter.classList.toggle("active", filter.dataset.filter === "all"));
+          applyFilters();
+        }
+        if (entry.calendarDate) workspaceCalendar?.reveal(entry.calendarDate);
+        openWorkspaceSection(entry.target);
+        if (entry.checkpoint) {
+          const row = [...document.querySelectorAll("#checkpoints .task-row")].find(item => item.dataset.taskId === entry.checkpoint);
+          row?.querySelector("input")?.focus({ preventScroll: true });
+          row?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }
+    });
+    results.appendChild(button);
+  });
+}
+let workspaceProgress = null;
+let workspaceCalendar = null;
+const workspacePages = ["resources", "roadmaps", "review", "learning", "find", "calendar", "settings", "progress"];
+function renderWorkspacePage(page) {
+  const selected = workspacePages.includes(page) ? page : "overview";
+  document.body.dataset.workspacePage = selected;
+  if (selected === "progress" || selected === "overview") workspaceProgress?.render();
+  if (selected !== "calendar") workspaceCalendar?.close();
+  else {
+    workspaceCalendar?.render();
+    document.getElementById("roadmapsFrame")?.contentWindow?.postMessage({ type: "semassist-dashboard-request-tracks" }, window.location.origin);
+  }
+  for (const id of ["overview", "activity", "custom", "workbench", "projects"]) {
+    document.getElementById(id).hidden = selected !== "overview";
+  }
+  for (const id of workspacePages) document.getElementById(id).hidden = selected !== id;
+  const titles = { overview: "Semester Dashboard", resources: "Resource Canvas", roadmaps: "My Roadmaps", review: "Review Sessions", learning: "Learning Tracks", find: "Search Workspace", calendar: "Study Calendar", settings: "Settings", progress: "Progress & Skills" };
+  document.title = `SEM ASSIST — ${titles[selected]}`;
+  document.querySelectorAll(".nav-button").forEach(nav => {
+    const active = nav.dataset.scroll === selected;
+    nav.classList.toggle("active", active);
+    if (active) nav.setAttribute("aria-current", "page");
+    else nav.removeAttribute("aria-current");
+  });
+}
 function openWorkspaceSection(id) {
   const section = document.getElementById(id);
   if (!section) return;
+  const page = workspacePages.includes(id) ? id : "overview";
+  if (document.body.dataset.workspacePage !== page) {
+    const url = new URL(window.location.href);
+    if (page === "overview") url.searchParams.delete("page");
+    else url.searchParams.set("page", page);
+    if (page !== "roadmaps") for (const key of ["roadmap", "view", "task"]) url.searchParams.delete(key);
+    url.hash = id;
+    window.history.pushState(null, "", url);
+    renderWorkspacePage(page);
+    if (page === "resources") renderResources(loadState());
+  }
   if (section.classList.contains("track-card")) {
     section.classList.add("open");
     section.setAttribute("aria-expanded", "true");
@@ -1904,6 +2304,49 @@ function formatDueDate(value) {
     day: "numeric",
   });
 }
+function renderProjects(state) {
+  document.getElementById("projectCount").textContent = `${state.projects.length} projects · ${state.projects.filter(project => project.status === "completed").length} completed`;
+  document.getElementById("projectEmpty").hidden = state.projects.length > 0;
+  document.getElementById("projectList").innerHTML = state.projects.map(project => `
+    <article class="custom-row project-row">
+      <div class="project-copy"><h3>${escapeHtml(project.name)}</h3>${project.description ? `<p>${escapeHtml(project.description)}</p>` : ""}</div>
+      <label class="custom-field"><span>Status for ${escapeHtml(project.name)}</span><select data-project-status="${project.id}">${Object.entries(projectStatuses).map(([value, label]) => `<option value="${value}" ${project.status === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+      <button class="custom-delete" type="button" data-project-delete="${project.id}" aria-label="Delete ${escapeHtml(project.name)}" title="Delete project">×</button>
+    </article>`).join("");
+}
+function saveCalendarEvents(calendarEvents, message) {
+  return saveCalendarPlan({ calendarEvents }, message);
+}
+function saveCalendarPlan(changes, message) {
+  if (sessionApplyPromise) { message.textContent = "Your account is still loading. Try again in a moment."; return false; }
+  const next = { ...loadState(), ...changes };
+  try { localStorage.setItem(storageKeyForUser(currentUser?.id), JSON.stringify(next)); }
+  catch { message.textContent = "Could not save the calendar change. Free some browser storage and try again."; return false; }
+  saveState(next);
+  updateSummary(next);
+  return true;
+}
+function persistProjects(projects) {
+  const message = document.getElementById("projectMessage");
+  if (sessionApplyPromise) { message.textContent = "Your account is still loading. Try saving again in a moment."; return false; }
+  const next = { ...loadState(), projects };
+  try { localStorage.setItem(storageKeyForUser(currentUser?.id), JSON.stringify(next)); }
+  catch { message.textContent = "Could not save your projects. Free some browser storage and try again."; return false; }
+  saveState(next);
+  updateSummary(next);
+  message.textContent = "Projects saved.";
+  return true;
+}
+function addProject(event) {
+  event.preventDefault();
+  const form = document.getElementById("projectForm");
+  const name = document.getElementById("projectName").value.trim();
+  if (!form.checkValidity() || !name || name.length > 140 || document.getElementById("projectDescription").value.trim().length > 300) return;
+  const projects = loadState().projects;
+  if (projects.length >= 100) { document.getElementById("projectMessage").textContent = "You can save up to 100 projects."; return; }
+  const project = { id: `project-${crypto.randomUUID()}`, name, description: document.getElementById("projectDescription").value.trim(), status: document.getElementById("projectStatus").value };
+  if (persistProjects([...projects, project])) { form.reset(); document.getElementById("projectName").focus(); }
+}
 function renderCustomTasks(state) {
   const list = document.getElementById("customTasks");
   const empty = document.getElementById("customEmpty");
@@ -1980,7 +2423,7 @@ function renderActivity(state) {
       sessionsByDay[session.date].minutes += Number(session.minutes) || 0;
       if (session.note) {
         const trackName = session.track
-          ? (tracks.find(track => track.id === session.track) || {}).name
+          ? (allLearningTracks(state).find(track => track.id === session.track) || {}).name
           : null;
         sessionsByDay[session.date].notes.push(
           trackName ? `${trackName}: ${session.note}` : session.note
@@ -2054,7 +2497,7 @@ function toggleTask(id, trackId, checked) {
       });
     state.activity[date] = (Number(state.activity[date]) || 0) + 1;
     showToast(
-      `${tracks.find(track => track.id === trackId).name} checkpoint verified.`
+      `${allLearningTracks(state).find(track => track.id === trackId).name} checkpoint verified.`
     );
     awardPoints(CHECKPOINT_POINTS);
   } else if (!checked && wasChecked && state.completedAt[id]) {
@@ -2110,7 +2553,7 @@ function renderReviewQueue(state) {
   const count = document.getElementById("reviewCount");
   if (!queue || !empty) return;
   const due = [];
-  tracks.forEach(track =>
+  allLearningTracks(state).forEach(track =>
     track.tasks.forEach((task, index) => {
       const id = taskId(track, index);
       const milestone = reviewDue(state, id);
@@ -2266,20 +2709,21 @@ function openJournalPrompt(minutes) {
   const overlay = document.getElementById("journalOverlay");
   if (!overlay || minutes <= 0) return;
   const select = document.getElementById("journalTrack");
-  if (!select.options.length) {
+  const state = loadState();
+  select.innerHTML = "";
+  {
     const option = (value, label) => {
       const element = document.createElement("option");
       element.value = value;
       element.textContent = label;
       return element;
     };
-    tracks.forEach(track => select.appendChild(option(track.id, track.name)));
+    allLearningTracks(state).forEach(track => select.appendChild(option(track.id, track.name)));
     select.appendChild(option("other", "Other / general"));
   }
   document.getElementById("journalTitle").textContent =
     `${formatMinutes(minutes)} of focus — what did you work on?`;
-  const state = loadState();
-  const queued = tracks.some(track => track.id === state.queueFocus)
+  const queued = allLearningTracks(state).some(track => track.id === state.queueFocus)
     ? state.queueFocus
     : "other";
   select.value = queued;
@@ -2304,7 +2748,7 @@ function saveJournalFocus() {
   let savedTrack = null;
   if (last) {
     savedTrack =
-      trackId !== "other" && tracks.some(track => track.id === trackId)
+      trackId !== "other" && allLearningTracks(state).some(track => track.id === trackId)
         ? trackId
         : null;
     last.track = savedTrack;
@@ -2315,7 +2759,7 @@ function saveJournalFocus() {
   renderFocusTotals(state);
   renderActivity(state);
   renderHomeWorkspace(state);
-  const track = tracks.find(item => item.id === savedTrack);
+  const track = allLearningTracks(state).find(item => item.id === savedTrack);
   showToast(track ? `${track.name} focus logged.` : "Focus session saved.");
 }
 function skipJournalPrompt() {
@@ -2377,6 +2821,7 @@ async function applySession(user) {
     return await sessionApplyPromise;
   } finally {
     sessionApplyPromise = null;
+    document.getElementById("roadmapsFrame")?.contentWindow?.postMessage({ type: "semassist-dashboard-request-tracks" }, window.location.origin);
   }
 }
 // A recovery link signs the user in, but the reason they are here is to set a
@@ -2397,6 +2842,18 @@ function showSignedInChrome(user, localDemo = false) {
   if (!signedIn) closePasswordDialog();
 }
 async function applySessionNow(user) {
+  if (currentUser?.id !== user?.id) {
+    trackEditorOwner = user?.id || "guest";
+    resetLearningEditor();
+    workspaceCalendar?.reset();
+    workspaceProgress?.reset();
+    document.getElementById("projectForm").reset();
+    document.getElementById("projectMessage").textContent = "";
+    roadmapTracks = [];
+    const search = document.getElementById("workspaceSearch");
+    if (search) search.value = "";
+    document.getElementById("workspaceSearchResults")?.replaceChildren();
+  }
   currentUser = user || null;
   showSignedInChrome(user);
   if (!user) {
@@ -2814,7 +3271,7 @@ function buildSemesterReport(state) {
   const journalRows = journals
     .map(session => {
       const track = session.track
-        ? tracks.find(item => item.id === session.track)
+        ? allLearningTracks(state).find(item => item.id === session.track)
         : null;
       const trackName = track ? track.name : "General";
       const color = track ? track.color : "#c9c6bb";
@@ -2827,7 +3284,7 @@ function buildSemesterReport(state) {
       );
     })
     .join("");
-  const trackRows = tracks
+  const trackRows = allLearningTracks(state)
     .map(track => {
       const item = stats.byTrack[track.id];
       return (
@@ -2909,6 +3366,80 @@ body { margin: 0; font: 9.5px/1.45 -apple-system, "Segoe UI", Roboto, Arial, san
 async function init() {
   if (initialized) return;
   initialized = true;
+  const restoreWorkspacePage = () => {
+    const params = new URLSearchParams(window.location.search);
+    renderWorkspacePage(params.get("page") || (params.has("roadmap") ? "roadmaps" : window.location.hash.slice(1)));
+  };
+  restoreWorkspacePage();
+  window.addEventListener("popstate", restoreWorkspacePage);
+  initLearningPage();
+  initWorkspaceSettings();
+  document.getElementById("settingsProfile").addEventListener("click", () => {
+    openWorkspaceSection("overview");
+    document.querySelector(".profile-details").open = true;
+    document.querySelector(".profile-card").scrollIntoView({ behavior: "smooth", block: "center" });
+    document.querySelector(".profile-card .profile-edit")?.focus({ preventScroll: true });
+  });
+  document.getElementById("workspaceSearch").addEventListener("input", () => renderSearchResults());
+  const localDemo =
+    ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname) &&
+    new URLSearchParams(window.location.search).get("demo") === "1";
+  const roadmapsFrame = document.getElementById("roadmapsFrame");
+  if (roadmapsFrame) {
+    const studyParams = new URLSearchParams(window.location.search);
+    const frameParams = new URLSearchParams({ embedded: "1" });
+    if (localDemo) frameParams.set("demo", "1");
+    for (const key of ["roadmap", "view", "task"]) {
+      if (studyParams.has(key)) frameParams.set(key, studyParams.get(key));
+    }
+    roadmapsFrame.src = `./roadmaps.html?${frameParams}`;
+    roadmapsFrame.addEventListener("load", () => roadmapsFrame.contentWindow?.postMessage({ type: "semassist-dashboard-request-tracks" }, window.location.origin));
+    window.addEventListener("message", event => {
+      if (
+        event.origin !== window.location.origin ||
+        event.source !== roadmapsFrame.contentWindow
+      ) return;
+      if (event.data?.type === "semassist-roadmaps-height" && Number.isFinite(event.data.height)) {
+        roadmapsFrame.style.height = `${Math.max(240, Math.ceil(event.data.height))}px`;
+      }
+      if (event.data?.type === "semassist-roadmaps-tracks" && Array.isArray(event.data.tracks)) {
+        if (event.data.accountId && event.data.accountId !== (localDemo ? "demo" : currentUser?.id || "signed-out")) return;
+        roadmapTracks = event.data.tracks.filter(track => track && typeof track.id === "string" && typeof track.name === "string" && Array.isArray(track.tasks)).map(track => ({
+          id: `roadmap:${track.id}`, roadmapId: track.id, name: track.name, subject: String(track.subject || "Saved roadmap"),
+          tasks: track.tasks.filter(task => task && typeof task.id === "string" && typeof task.label === "string").map(task => ({ id: `roadmap:${track.id}:${task.id}`, sourceTaskId: task.id, label: task.label, meta: String(task.meta || "Roadmap checkpoint"), completed: Boolean(task.completed), date: validCalendarDate(task.date) ? task.date : null, searchText: String(task.searchText || "") })),
+          searchEntries: Array.isArray(track.searchEntries) ? track.searchEntries.filter(item => item && typeof item.title === "string" && typeof item.text === "string" && ["roadmap", "resources", "overview"].includes(item.view)).map(item => ({ kind: String(item.kind || "Roadmap topic"), title: item.title, text: item.text, view: item.view })) : [],
+        }));
+        if (currentState) {
+          renderTracks(currentState);
+          updateSummary(currentState);
+        }
+      }
+      if (event.data?.type === "semassist-roadmaps-progress" && typeof event.data.roadmap === "string" && Array.isArray(event.data.completed)) {
+        const track = roadmapTracks.find(item => item.roadmapId === event.data.roadmap);
+        if (track) {
+          const completed = new Set(event.data.completed.filter(id => typeof id === "string"));
+          track.tasks.forEach(task => { task.completed = completed.has(task.sourceTaskId); });
+          if (currentState) {
+            renderTracks(currentState);
+            updateSummary(currentState);
+          }
+        }
+      }
+      if (event.data?.type === "semassist-roadmaps-route") {
+        if (document.body.dataset.workspacePage !== "roadmaps") return;
+        const { roadmap, view, task } = event.data;
+        const id = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i;
+        if (roadmap && (!id.test(roadmap) || !["overview", "roadmap", "schedule", "resources", "progress", "settings"].includes(view) || (task && !id.test(task)))) return;
+        const url = new URL(window.location.href);
+        for (const [key, value] of [["roadmap", roadmap], ["view", view], ["task", task]]) {
+          if (roadmap && value) url.searchParams.set(key, value);
+          else url.searchParams.delete(key);
+        }
+        url.hash = "roadmaps";
+        window.history.replaceState(null, "", url);
+      }
+    });
+  }
   initCookieBanner();
   const snapToggle = document.getElementById("resourceSnap");
   if (snapToggle) {
@@ -2918,6 +3449,10 @@ async function init() {
     );
   }
   document.addEventListener("click", event => {
+    const customize = event.target.closest("[data-customize-track]");
+    if (customize) { customizeLearningTrack(customize.dataset.customizeTrack); return; }
+    const roadmap = event.target.closest("[data-roadmap-open]");
+    if (roadmap) { openRoadmap(roadmap.dataset.roadmapOpen); return; }
     const inspect = event.target.closest("[data-inspect-track]");
     if (inspect) {
       inspectedTrackId = inspect.dataset.inspectTrack;
@@ -2930,11 +3465,15 @@ async function init() {
       return;
     }
     const route = event.target.closest("[data-scroll], [data-open-track]");
-    if (route) openWorkspaceSection(route.dataset.scroll || route.dataset.openTrack);
+    if (route) {
+      const sectionId = route.dataset.scroll || route.dataset.openTrack;
+      openWorkspaceSection(sectionId);
+      if (sectionId === "roadmaps") document.getElementById("roadmapsFrame")?.contentWindow?.postMessage({ type: "semassist-dashboard-request-tracks" }, window.location.origin);
+    }
     const action = event.target.closest("[data-home-action]")?.dataset.homeAction;
     if (action === "newTask" || action === "newResource" || action === "search") {
-      const id = action === "newTask" ? "customTaskInput" : action === "newResource" ? "resourceName" : "search";
-      openWorkspaceSection(action === "newTask" ? "custom" : action === "newResource" ? "resources" : "workbench");
+      const id = action === "newTask" ? "customTaskInput" : action === "newResource" ? "resourceName" : "workspaceSearch";
+      openWorkspaceSection(action === "newTask" ? "custom" : action === "newResource" ? "resources" : "find");
       document.getElementById(id)?.focus({ preventScroll: true });
     } else if (action) document.getElementById(action)?.click();
   });
@@ -2947,12 +3486,29 @@ async function init() {
       applyFilters();
     })
   );
+  // The floating list belongs to its card, so moving into it keeps hover open.
+  for (const type of ["pointerover", "pointerout"]) {
+    document.getElementById("checkpoints").addEventListener(type, event => {
+      if (event.pointerType !== "mouse") return;
+      const card = event.target.closest(".track-card");
+      if (!card || (event.relatedTarget instanceof Node && card.contains(event.relatedTarget))) return;
+      const open = type === "pointerover";
+      card.classList.toggle("hovering", open);
+      card.classList.toggle("open", open);
+      card.setAttribute("aria-expanded", String(open));
+      if (!open) {
+        card.classList.remove("expanded");
+        if (card.contains(document.activeElement)) document.activeElement.blur();
+      }
+    });
+  }
   // Tiles expand on click: toggle when the tile (head/chrome) is clicked, but
   // never when the click targets the task list or an interactive control.
   document.getElementById("checkpoints").addEventListener("click", event => {
     const card = event.target.closest(".track-card");
     if (!card) return;
     if (event.target.closest(".task-list, a, input, button")) return;
+    if (card.classList.contains("hovering")) return;
     const open = card.classList.toggle("open");
     card.setAttribute("aria-expanded", String(open));
     // A checkbox left focused inside the tile would keep it expanded via
@@ -2980,9 +3536,7 @@ async function init() {
         item.classList.toggle("active", item.dataset.filter === "open")
       );
     applyFilters();
-    document
-      .getElementById("workbench")
-      .scrollIntoView({ behavior: "smooth", block: "start" });
+    openWorkspaceSection("workbench");
   });
   document.getElementById("search").addEventListener("input", applyFilters);
   // Keyboard shortcuts: j/k move the checkpoint cursor, Space toggles it, /
@@ -3003,9 +3557,11 @@ async function init() {
     if (reportOverlay && !reportOverlay.hidden) return;
     if (shareOverlay && !shareOverlay.hidden) return;
     if (passwordOverlay && !passwordOverlay.hidden) return;
+    if (document.body.dataset.workspacePage !== "overview" && ["j", "k", " "].includes(event.key)) return;
     if (event.key === "/") {
       event.preventDefault();
-      const search = document.getElementById("search");
+      openWorkspaceSection("find");
+      const search = document.getElementById("workspaceSearch");
       search?.focus();
       search?.select();
     } else if (event.key === "j" || event.key === "k") {
@@ -3013,6 +3569,7 @@ async function init() {
       moveKeyboardCursor(event.key === "j" ? 1 : -1);
     } else if (event.key === "t") {
       event.preventDefault();
+      if (document.body.dataset.workspacePage !== "overview") openWorkspaceSection("activity");
       toggleFocusTimer();
     } else if (event.key === " ") {
       // Only when focus is on the page itself (not a button, link, or tile),
@@ -3028,6 +3585,10 @@ async function init() {
   document.getElementById("missionQueue").addEventListener("click", event => {
     const row = event.target.closest("[data-qid]");
     if (!row) return;
+    if (row.dataset.roadmapId) {
+      openRoadmap(row.dataset.roadmapId);
+      return;
+    }
     toggleTask(row.dataset.qid, row.dataset.track, true);
   });
   document.getElementById("queueFocus").addEventListener("change", event => {
@@ -3035,6 +3596,26 @@ async function init() {
     state.queueFocus = event.target.value || "all";
     saveState(state);
     renderMissionQueue(state);
+  });
+  workspaceProgress = initWorkspaceProgress({ loadState, tracks: () => allLearningTracks(loadState()), roadmaps: () => roadmapTracks, taskId, todayKey, escapeHtml, formatMinutes, openSection: (track, checkpoint) => {
+    activeFilter = "all";
+    document.getElementById("search").value = "";
+    document.querySelectorAll(".filter").forEach(filter => filter.classList.toggle("active", filter.dataset.filter === "all"));
+    applyFilters();
+    openWorkspaceSection(track);
+    keyboardRowById(checkpoint)?.querySelector("input")?.focus({ preventScroll: true });
+  }, openRoadmap });
+  workspaceCalendar = initWorkspaceCalendar({ loadState, saveEvents: saveCalendarEvents, savePlan: saveCalendarPlan, tracks: () => allLearningTracks(loadState()), roadmaps: () => roadmapTracks, taskId, todayKey, escapeHtml, openSection: openWorkspaceSection, openRoadmap });
+  document.getElementById("projectForm").addEventListener("submit", addProject);
+  document.getElementById("projectList").addEventListener("change", event => {
+    const id = event.target.dataset.projectStatus;
+    if (id && Object.hasOwn(projectStatuses, event.target.value)) {
+      if (!persistProjects(loadState().projects.map(project => project.id === id ? { ...project, status: event.target.value } : project))) renderProjects(loadState());
+    }
+  });
+  document.getElementById("projectList").addEventListener("click", event => {
+    const button = event.target.closest("[data-project-delete]");
+    if (button) persistProjects(loadState().projects.filter(project => project.id !== button.dataset.projectDelete));
   });
   document
     .getElementById("customForm")
@@ -3302,40 +3883,6 @@ async function init() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") keepaliveFlush();
   });
-  const localDemo =
-    ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname) &&
-    new URLSearchParams(window.location.search).get("demo") === "1";
-  const roadmapsFrame = document.getElementById("roadmapsFrame");
-  if (roadmapsFrame) {
-    const studyParams = new URLSearchParams(window.location.search);
-    const frameParams = new URLSearchParams({ embedded: "1" });
-    if (localDemo) frameParams.set("demo", "1");
-    for (const key of ["roadmap", "view", "task"]) {
-      if (studyParams.has(key)) frameParams.set(key, studyParams.get(key));
-    }
-    roadmapsFrame.src = `./roadmaps.html?${frameParams}`;
-    window.addEventListener("message", event => {
-      if (
-        event.origin !== window.location.origin ||
-        event.source !== roadmapsFrame.contentWindow
-      ) return;
-      if (event.data?.type === "semassist-roadmaps-height" && Number.isFinite(event.data.height)) {
-        roadmapsFrame.style.height = `${Math.max(240, Math.ceil(event.data.height))}px`;
-      }
-      if (event.data?.type === "semassist-roadmaps-route") {
-        const { roadmap, view, task } = event.data;
-        const id = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i;
-        if (roadmap && (!id.test(roadmap) || !["overview", "roadmap", "schedule", "resources", "progress", "settings"].includes(view) || (task && !id.test(task)))) return;
-        const url = new URL(window.location.href);
-        for (const [key, value] of [["roadmap", roadmap], ["view", view], ["task", task]]) {
-          if (roadmap && value) url.searchParams.set(key, value);
-          else url.searchParams.delete(key);
-        }
-        url.hash = "roadmaps";
-        window.history.replaceState(null, "", url);
-      }
-    });
-  }
   if (localDemo) {
     showSignedInChrome(null, true);
     return;
@@ -3406,6 +3953,11 @@ export {
   COOKIE_CONSENT_KEY,
   initCookieBanner,
   tracks,
+  allLearningTracks,
+  safeTrackCover,
+  readTrackCover,
+  workspaceSearchEntries,
+  TRACK_ICONS,
   taskId,
   dateKey,
   todayKey,

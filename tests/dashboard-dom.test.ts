@@ -9,9 +9,43 @@ import {
 } from "./helpers";
 
 describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
+  it("keeps the checkpoint list open across mouse movement and completion, then collapses on leaving the entire card", async () => {
+    const { doc, win } = await bootApp({ url: "http://localhost:3000/study-dashboard.html?demo=1" });
+    const pointer = (target: Element, type: string, relatedTarget: EventTarget | null = null, pointerType = "mouse") => {
+      const event = new win.MouseEvent(type, { bubbles: true, relatedTarget });
+      Object.defineProperty(event, "pointerType", { value: pointerType });
+      target.dispatchEvent(event);
+    };
+    const card = () => byId(doc, "python")!;
+    const head = () => card().querySelector<HTMLElement>(".track-head")!;
+    pointer(head(), "pointerover", doc.body, "touch");
+    expect(card().classList.contains("open")).toBe(false);
+    pointer(head(), "pointerover", doc.body);
+    expect(card().getAttribute("aria-expanded")).toBe("true");
+    head().click();
+    expect(card().classList.contains("open")).toBe(true);
+    const checkbox = card().querySelector<HTMLInputElement>(".check")!;
+    pointer(head(), "pointerout", checkbox);
+    pointer(checkbox, "pointerover", head());
+    expect(card().classList.contains("open")).toBe(true);
+    checkbox.click();
+    expect(card().classList.contains("hovering")).toBe(true);
+    const nextCheckbox = card().querySelector<HTMLInputElement>(".check")!;
+    nextCheckbox.focus();
+    pointer(nextCheckbox, "pointerout", doc.body);
+    expect(card().classList.contains("open")).toBe(false);
+    expect(card().getAttribute("aria-expanded")).toBe("false");
+    expect(card().contains(doc.activeElement)).toBe(false);
+    expect((stored(doc)!.completed as Record<string, boolean>)["python-1"]).toBe(true);
+    head().dispatchEvent(new win.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(card().getAttribute("aria-expanded")).toBe("true");
+  });
   it("selects a home track, filters upcoming checkpoints, and opens its real checkpoints", async () => {
-    const { doc } = await bootApp({ url: "http://localhost:3000/study-dashboard.html?demo=1" });
-    expect(doc.querySelectorAll(".learning-card")).toHaveLength(4);
+    const { doc } = await bootApp({
+      url: "http://localhost:3000/study-dashboard.html?demo=1",
+      preSeed: { [STORAGE_KEY]: JSON.stringify({ completed: {} }) },
+    });
+    expect(doc.querySelectorAll(".learning-card")).toHaveLength(6);
     expect(doc.querySelector(".timer-card, .recent-entries, .resource-highlight")).toBeNull();
     expect(doc.querySelector("#activity .focus-panel #timerStart")).not.toBeNull();
     byId(doc, "java")!.scrollIntoView = vi.fn();
@@ -31,7 +65,7 @@ describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
   });
 
   it("updates the home record from real completions and safely displays private study text", async () => {
-    const { app, doc } = await bootApp({
+    const { doc } = await bootApp({
       url: "http://localhost:3000/study-dashboard.html?demo=1",
       preSeed: { [STORAGE_KEY]: JSON.stringify({
         completed: {}, completedAt: {}, activity: {},
@@ -46,7 +80,8 @@ describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
     doc.querySelector<HTMLInputElement>('.task-row[data-task-id="python-1"] .check')!.click();
     expect(text(byId(doc, "sidebarCheckpoints"))).toBe("1 / 76");
     expect(text(byId(doc, "homeToday"))).toBe("1");
-    expect(byId(doc, "workspaceDate")!.getAttribute("datetime")).toBe(app.todayKey());
+    expect(byId(doc, "workspaceDate")).toBeNull();
+    expect(doc.querySelector(".topbar #welcomeHeadline")).not.toBeNull();
     doc.querySelector<HTMLInputElement>('.task-row[data-task-id="python-1"] .check')!.click();
     expect(text(byId(doc, "sidebarCheckpoints"))).toBe("0 / 76");
   });
@@ -66,6 +101,70 @@ describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
     expect(factory).not.toHaveBeenCalled();
     doc.querySelector<HTMLInputElement>('.task-row[data-task-id="python-1"] .check')!.click();
     expect((stored(doc)!.completed as Record<string, boolean>)["python-1"]).toBe(true);
+  });
+  it("shows saved roadmap plans as learning tracks, checkpoints, and focus choices", async () => {
+    const { doc } = await bootApp({ url: "http://localhost:3000/study-dashboard.html?demo=1" });
+    const win = doc.defaultView!;
+    const frame = byId(doc, "roadmapsFrame") as HTMLIFrameElement;
+    const roadmapId = "a754c0d1-6e9d-406d-9645-85eeea40f2e5";
+    win.dispatchEvent(new win.MessageEvent("message", {
+      origin: win.location.origin,
+      source: frame.contentWindow,
+      data: { type: "semassist-roadmaps-tracks", tracks: [{
+        id: roadmapId, name: "Beginner Python", subject: "Python", tasks: [
+          { id: "9f4ed678-318c-4d79-b1d8-f4b5a9340c46", label: "Build a small script", meta: "project · 30 min", completed: false },
+        ],
+      }] },
+    }));
+    expect(doc.querySelector('#homeTracks h3')?.textContent).toBe("Python");
+    expect([...doc.querySelectorAll("#homeTracks h3")].map(node => node.textContent)).toContain("Beginner Python");
+    expect(byId(doc, `roadmap-track-roadmap:${roadmapId}`)?.textContent).toContain("Build a small script");
+    expect(byId(doc, "homeTrackCount")?.textContent).toBe("07");
+    const focus = byId(doc, "queueFocus") as HTMLSelectElement;
+    expect([...focus.options].some(option => option.value === `roadmap:${roadmapId}`)).toBe(true);
+    focus.value = `roadmap:${roadmapId}`;
+    focus.dispatchEvent(new win.Event("change", { bubbles: true }));
+    expect(doc.querySelector("#missionQueue .queue-row")?.textContent).toContain("Build a small script");
+  });
+
+  it.each(["resources", "roadmaps", "review"])("opens %s as a dedicated page on a direct URL", async page => {
+    const { doc } = await bootApp({ url: `http://localhost:3000/study-dashboard.html?demo=1&page=${page}` });
+    expect(doc.body.dataset.workspacePage).toBe(page);
+    for (const id of ["overview", "activity", "custom", "workbench"]) expect(byId(doc, id)!.hidden).toBe(true);
+    for (const id of ["resources", "roadmaps", "review"]) expect(byId(doc, id)!.hidden).toBe(id !== page);
+    expect(doc.querySelector(`.nav-button[data-scroll="${page}"]`)!.getAttribute("aria-current")).toBe("page");
+  });
+
+  it("moves between dedicated pages and the dashboard without losing study data, including history navigation", async () => {
+    const { doc, win } = await bootApp({
+      url: "http://localhost:3000/study-dashboard.html?demo=1",
+      preSeed: { [STORAGE_KEY]: JSON.stringify({ completed: { "python-1": true }, resources: [{ id: "saved", name: "Python guide", url: "https://example.com/python" }] }) },
+    });
+    for (const id of ["resources", "roadmaps", "review", "overview", "workbench"]) byId(doc, id)!.scrollIntoView = vi.fn();
+    expect(byId(doc, "resources")!.hidden).toBe(true);
+    const initial = stored(doc);
+    for (const page of ["resources", "review", "roadmaps"]) {
+      doc.querySelector<HTMLButtonElement>(`.nav-button[data-scroll="${page}"]`)!.click();
+      expect(new URL(win.location.href).searchParams.get("page")).toBe(page);
+      expect(byId(doc, page)!.hidden).toBe(false);
+      expect(byId(doc, "overview")!.hidden).toBe(true);
+    }
+    doc.querySelector<HTMLButtonElement>('.nav-button[data-scroll="overview"]')!.click();
+    expect(byId(doc, "overview")!.hidden).toBe(false);
+    expect(new URL(win.location.href).searchParams.has("page")).toBe(false);
+    expect(stored(doc)).toEqual(initial);
+    expect(byId(doc, "resourceList")!.textContent).toContain("Python guide");
+    win.history.replaceState(null, "", "?demo=1&page=review");
+    win.dispatchEvent(new win.PopStateEvent("popstate"));
+    expect(doc.body.dataset.workspacePage).toBe("review");
+    expect(byId(doc, "review")!.hidden).toBe(false);
+    expect(byId(doc, "overview")!.hidden).toBe(true);
+    doc.body.dispatchEvent(new win.KeyboardEvent("keydown", { key: "j", bubbles: true }));
+    expect(doc.querySelector(".key-cursor")).toBeNull();
+    byId(doc, "showOpen")!.click();
+    expect(doc.body.dataset.workspacePage).toBe("overview");
+    expect(new URL(win.location.href).searchParams.has("page")).toBe(false);
+    expect(byId(doc, "workbench")!.hidden).toBe(false);
   });
 
   it("keeps authentication visible for demo URLs on deployed origins", async () => {
@@ -883,9 +982,11 @@ describe("keyboard shortcuts", () => {
 
   it("slash focuses the search box", async () => {
     const { doc } = await bootApp();
-    const search = byId(doc, "search") as HTMLInputElement;
+    byId(doc, "find")!.scrollIntoView = vi.fn();
+    const search = byId(doc, "workspaceSearch") as HTMLInputElement;
     key(doc, "/");
     expect(doc.activeElement).toBe(search);
+    expect(doc.body.dataset.workspacePage).toBe("find");
   });
 
   it("j walks down the checkpoints, opening the owning tile and collapsing the previous", async () => {
@@ -2030,18 +2131,15 @@ describe("profile card", () => {
     expect(overlay.hasAttribute("hidden")).toBe(true);
   });
 
-  it("starts fully neutral for fresh visitors with a [yourname] placeholder, then personalizes", async () => {
+  it("uses Sujay as the fresh profile name, then personalizes", async () => {
     const { app, doc } = await bootApp();
     const nameEl = byId(doc, "profileNameRow")!.querySelector(".profile-name")!;
-    expect(text(nameEl)).toBe("[yourname]");
-    expect(nameEl.classList.contains("placeholder")).toBe(true);
-    // The greeting carries the bracketed placeholder beside the welcome text.
+    expect(text(nameEl)).toBe("Sujay");
+    expect(nameEl.classList.contains("placeholder")).toBe(false);
+    expect(text(byId(doc, "profileAvatar"))).toBe("S");
     const headline = byId(doc, "welcomeHeadline")!;
-    expect(text(headline)).toContain("Welcome in, [yourname].");
-    const headlineName = headline.querySelector(".welcome-name.placeholder")!;
-    expect(headlineName).toBeTruthy();
-    // Clicking the headline placeholder opens the name editor too.
-    (headlineName as HTMLElement).click();
+    expect(text(headline)).toContain("Welcome in, Sujay.");
+    byId(doc, "profileNameRow")!.querySelector<HTMLElement>("[data-edit-name]")!.click();
     expect(doc.querySelector<HTMLInputElement>(".profile-name-input")!).toBeTruthy();
     // No fabricated skills or stats: badges show an honest placeholder.
     const badges = [
@@ -2054,7 +2152,8 @@ describe("profile card", () => {
     const svg = (app as { buildProfileCardSvg(_state: object): string }).buildProfileCardSvg(
       (app as { loadState(): object }).loadState()
     );
-    expect(svg).toContain("[yourname]");
+    expect(svg).toContain("Sujay");
+    expect(svg).toContain(">S<");
     expect(svg).not.toContain("Semester 3");
     expect(svg).not.toContain("Riya");
   });

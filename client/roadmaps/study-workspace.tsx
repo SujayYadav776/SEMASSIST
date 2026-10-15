@@ -117,7 +117,7 @@ function MoveAssignment({ value, schedule, assignment, records, sync }: { value:
 
 export function StudyWorkspace(props: Props) {
   const refreshStudy = useRef<() => void>(() => {});
-  const [, redraw] = useState(0);
+  const [revision, redraw] = useState(0);
   const [engine, setEngine] = useState<StudySync>();
   const [loadError, setLoadError] = useState("");
   const [view, setView] = useState<View>(routeFromLocation);
@@ -186,6 +186,13 @@ export function StudyWorkspace(props: Props) {
     const visibility = () => { if (document.visibilityState === "visible") retry(); }; document.addEventListener("visibilitychange", visibility);
     return () => { cancelled = true; lockAbort.abort(); sync?.stop(); unlock?.(); delete window.semassistStudy; window.removeEventListener("online", retry); window.removeEventListener("offline", retry); window.removeEventListener("focus", retry); window.removeEventListener("pageshow", retry); window.removeEventListener("beforeunload", leave); document.removeEventListener("visibilitychange", visibility); };
   }, []);
+
+  useEffect(() => {
+    if (!engine || window.parent === window) return;
+    const value = engine.snapshot.package;
+    const records = optimisticRecords(engine.snapshot);
+    parent.postMessage({ type: "semassist-roadmaps-progress", roadmap: props.roadmapId, completed: value.content.tasks.filter(item => isCompleted(records, item.taskId)).map(item => item.taskId) }, location.origin);
+  }, [engine, props.roadmapId, revision]);
 
   useEffect(() => {
     const changed = () => { setView(routeFromLocation()); setTaskId(taskFromRoute(location.search, location.hash)); };

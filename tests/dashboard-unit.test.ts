@@ -575,8 +575,8 @@ describe("buildProfileCardSvg", () => {
     const svg = buildProfileCardSvg(state);
     expect(svg.startsWith("<svg")).toBe(true);
     expect(svg).toContain("SEM ASSIST");
-    expect(svg).toContain("[yourname]"); // neutral placeholder name
-    expect(svg).toContain(">+<"); // avatar renders the + glyph
+    expect(svg).toContain("Sujay");
+    expect(svg).toContain(">S<"); // avatar renders the default name initial
     expect(svg).toContain("6/76");
     expect(svg).toContain("60"); // 6 × 10 proof points
     expect(svg).toContain("Python");

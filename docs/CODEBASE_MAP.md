@@ -19,6 +19,9 @@ and `tests/roadmap-{schema,tools}.test.ts`. Current dashboard imports remain leg
 | `client/src/pages/Home.tsx` | Route `/` — immediately redirects to the static dashboard |
 | `client/public/study-dashboard-boot.js` | Imports `init` and calls it; the module itself does not self-init |
 | `client/public/study-dashboard.js` | All dashboard behavior; `init()` is the runtime entry |
+| `study-dashboard.html?page=resources`, `?page=roadmaps`, `?page=review` | Dedicated workspace page URLs; `renderWorkspacePage` / `openWorkspaceSection` in dashboard JS control visibility and history while sharing saved state |
+| `study-dashboard.html?page=learning`, `?page=find` | Learning track creation, covers/icons/sidebar preferences; universal workspace search |
+| `client/public/learning-track-icons.js` | 32 local Lucide icons used by track cards, the picker and dynamic sidebar; accompanying ISC license |
 | `client/public/workspace.css` | Reference-based paper/charcoal home workspace; responsive shell, gallery and inspector; local font in public/fonts |
 | `server/index.ts` | Express static host + security headers + 404 (production) |
 | `scripts/configure-auth-smtp.mjs` | Owner-side Supabase custom-SMTP configurator (CLI) |
@@ -66,6 +69,10 @@ and `tests/roadmap-{schema,tools}.test.ts`. Current dashboard imports remain leg
 | Weekly rhythm chart | `study-dashboard.js` | `renderWeeklyProgress`, `weeklySeries`, `dateKey`/`todayKey` | `dashboard-unit.test.ts` |
 | Focus timer + journal + totals | `study-dashboard.js` | `toggleFocusTimer`, `addFocusMinutes`, `formatMinutes`, `renderFocusTotals`, journal overlay | `dashboard-dom.test.ts` |
 | Spaced-repetition review | `study-dashboard.js` | `reviewDue`, `markReviewSolid`, `markReviewRedo`, `renderReviewQueue`, `daysSince` | `dashboard-unit.test.ts` |
+| Progress and skill metrics | `client/public/workspace-progress.js`, `.css`; dashboard `#progress` and home `#homeSkillRadar` | `?page=progress`, `buildSkillMetrics`, `progressSeries`, `initWorkspaceProgress`; computed checkpoint coverage, recall evidence and actual activity/focus records | `progress.test.ts` |
+| App settings | `client/public/workspace-settings.js`, `appearance.js`, `theme.js`, `palette.css`; dashboard `#settings` | `?page=settings`, browser-wide font roles and six palettes, system/light/dark mode, existing management actions | `settings.test.ts` |
+| Full study calendar | `client/public/workspace-calendar.js`, `.css`, dashboard `#calendar` | `initWorkspaceCalendar`, `calendarWeek`, `calendarMonth`, `normalizeCalendarEvents`, `calendarEntryForDay`; `?page=calendar`, `calendarEvents` / `calendarTaskDates` state, drag/drop and date-picker plans, automatic unfinished carry-forward, effective assignment date projection | `calendar.test.ts`, `roadmap-library.test.ts` |
+| Projects | `study-dashboard.js` + `#projects` | `normalizeProjects`, `renderProjects`, `addProject`, `persistProjects`; per-user `projects` state, universal search | `projects.test.ts` |
 | Personal tasks | `study-dashboard.js` | `renderCustomTasks`, `addCustomTask`, `toggleCustomTask`, `deleteCustomTask`, `formatDueDate` | `dashboard-dom.test.ts` |
 | Resource canvas (drag, snap) | `study-dashboard.js` | `renderResources`, `addResource`, `deleteResource`, `validResourceUrl`, `snapToGrid`, `settlePosition`, `persistResourcePosition`, `clampToCanvas`, `resourceSnapEnabled` | `dashboard-dom.test.ts` |
 | Profile card + shareable PNG | `study-dashboard.js` | `renderProfile`, `profileDisplayName`, `editProfileName`, `editSemester`, `buildProfileCardSvg`, `svgToPngBlob`, `openShareCard`, `downloadSharePng`, `copySharePng`, `animateWelcomeText` | `dashboard-dom.test.ts` |

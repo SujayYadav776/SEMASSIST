@@ -1,5 +1,20 @@
 # Decisions — SEM ASSIST
 
+## DEC-020 — Personal tracks and universal workspace search
+Status: Active
+Decision date: 2026-10-14
+Decision: Store personal learning tracks and per-track appearance/sidebar settings in existing private per-user dashboard JSON. Keep agent Roadmaps packages unchanged. Use append-only personal checkpoints to preserve proof IDs. Decode and resize uploaded raster covers to bounded JPEG data URLs, and preflight storage before publishing editor changes. Use 32 local licensed Lucide icon nodes. Universal search combines dashboard state with trusted account-tagged projections of active roadmap package definitions and opens the relevant checkpoint or roadmap detail/view.
+Reason: Add track management and broader search with existing auth/sync/hosting, avoiding a new backend or divergent data stores.
+Limits: Up to 50 personal tracks and 100 checkpoints per personal track; raster uploads up to 5 MB, output up to 720×480 and 240,000 URL characters. Storage exhaustion shows an error before changing state. Roadmaps learner notes are not exposed to the parent search.
+Evidence: study-dashboard.js, learning-track-icons.js, roadmap-library.tsx and learning-workspace / roadmap-library tests.
+
+## DEC-019 — Dedicated workspace pages with shared state
+Status: Active
+Decision date: 2026-10-14
+Decision: Use query-based page views for Resources, Roadmaps and Review in the existing static document, with browser history and direct-link support. Hide inactive sections without duplicating the document or introducing a router. Keep the Roadmaps frame mounted for dashboard saved-track projections and account recovery checks.
+Reason: Separate these sections from the home page while preserving existing auth, per-user data and feature handlers.
+Evidence: renderWorkspacePage / openWorkspaceSection in study-dashboard.js and dashboard DOM navigation tests.
+
 Lightweight log of significant technical choices. IDs are stable; superseded entries
 stay in compact form. "Observed choice" means the code and docs show the decision was
 made but do not record who chose it or why.
@@ -197,3 +212,31 @@ Status: Active
 Decision date: 2026-10-11
 Decision: Keep Roadmaps backups separate from agent packages and legacy exports. Serialize server account operations with an advisory transaction lock; preserve private pre-restore receipts and compare the authoritative preview before restore. Merge skips complete colliding roadmaps; replace is atomic and raises learner revisions. Substantial task changes require new IDs; completion/notes copy only through explicit decisions, preserving originals. Retain all schedules and historical records. Package the independent skill by bundling the canonical validator, generated schema and fixtures. Release CI checks active product types without rewriting unrelated shell edits. Hosting permits same-origin frames for embedded Roadmaps.
 Evidence: backup.ts, 202610110002_backup_replan.sql, roadmap-account, roadmap-library tests, database tests, build-skill.ts and docs/BACKUP_REPLAN.md. Live release and full WCAG gates remain unverified.
+
+## DEC-021 — dedicated calendar and source dates (2026-10-15)
+
+Keep the monthly completion heatmap on home and offer a separate week calendar in the shared workspace. User-created timed sessions use the existing account JSON envelope with bounded, normalized data and local dates. Source tasks stay all-day until the user separately plans a timed session; roadmap dates come from active assignments and saved assignment moves. Calendar actions open original source content rather than mutating roadmap schedules or checkpoint completion. No sharing/collaboration endpoint is introduced.
+
+## DEC-022 — device appearance settings (2026-10-15)
+
+Keep theme/font preferences browser-wide to match the existing shared theme key and embedded Roadmaps document. Use shared head scripts and CSS font roles, with whitelisted local families and graceful storage failure. Manage study content through its existing actions rather than adding another persistence model. Keep the current palette and defer new palette/font assets until the user specifies them.
+
+Calendar refinement (2026-10-15): user requested all-day scheduling only. Remove time blocking and expose Week/Month views; preserve old record timing metadata for compatibility while new records use only dates.
+
+## DEC-023 — curated color palettes (2026-10-15)
+
+Add five muted palettes to the original, keeping the existing structure and fonts. Store a whitelisted palette ID in a browser-wide key; shared semantic color roles and a CSS bridge apply variants across dashboard, Roadmaps and 404. Mode and palette are independent. The local Roadmaps dark study view always uses the selected palette dark tokens, even when the global mode is light. Verify primary/muted/sidebar contrast numerically and preserve semantic track colors and user cover images.
+
+## DEC-024 — evidence-based skill progress (2026-10-15)
+
+Use transparent checkpoint coverage for each learning-path skill (verified / total * 100), combining the two built-in Python tracks. Keep Solid-review evidence separate rather than inventing ability weights. Score active roadmap paths from projected completion records. Use actual daily activity/focus ledgers for graphs, with no invented historical score curve. Compute the page from existing data without storing redundant metrics or exposing learner notes.
+
+
+## DEC-025 — Calendar checkpoint planning dates (2026-10-15)
+
+Drag/drop moves sessions and personal due dates directly. Learning/roadmap checkpoint placements belong to the dashboard account envelope as calendarTaskDates, keyed by the existing checkpoint identity; null explicitly means unscheduled. This provides personal calendar planning without bypassing the Roadmaps StudySync schedule-move validation, capacity warnings, override reasons and conflict handling. The date picker shows the original roadmap date. No new cloud table is needed.
+
+
+## DEC-026 — Compute unfinished calendar carry-forward (2026-10-15)
+
+Overdue unfinished entries are projected onto today using local date keys. Original assigned dates remain stored for provenance, so repeated renders/reloads do not create duplicates, writes or schedule conflicts. Completed/future/unscheduled entries retain their assigned placement. Sessions gain an optional persisted completed flag. Midnight and focus/visibility refresh keep a loaded calendar current.

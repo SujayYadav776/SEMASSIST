@@ -11,6 +11,7 @@
          with the dashboard (one localStorage key); CSP-safe: same-origin file,
          no inline script. -->
     <script src="./theme.js"></script>
+    <script src="./appearance.js"></script>
     <title>404 — SEM ASSIST</title>
     <style>
       @font-face { font-family: "DM Sans"; src: url("./fonts/dm-sans.ttf") format("truetype"); font-weight: 100 1000; font-display: swap; }
@@ -228,7 +229,13 @@
       .back-button:hover, :root[data-theme="dark"] .back-button:hover { transform:none; box-shadow:none; }
       .theme-toggle, :root[data-theme="dark"] .theme-toggle { color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:3px; box-shadow:none; }
       .theme-toggle:hover, :root[data-theme="dark"] .theme-toggle:hover { transform:none; background:var(--yellow-soft); }
-    </style>
+    @font-face { font-family:"Heming"; src:url("./fonts/heming-variable.ttf") format("truetype"); font-weight:100 900; font-display:swap; }
+ body { font-family:var(--app-body-font,"DM Sans",sans-serif); }
+ body :is(button,input,a,.code small) { font-family:var(--app-body-font,"DM Sans",sans-serif); }
+ body :is(h1,.brand) { font-family:var(--app-heading-font,"Heming",sans-serif); }
+ body .code { font-family:var(--app-number-font,"Heming",sans-serif); }
+</style>
+  <link rel="stylesheet" href="./palette.css" />
   </head>
   <body>
     <div class="page">

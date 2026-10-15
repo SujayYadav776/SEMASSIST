@@ -6,7 +6,7 @@ import { StudyWorkspace } from "./study-workspace";
 import { cloudRecords, demoTransport, downloadRecovery, cachedLibraryRows } from "./study-storage";
 import { indexedStore } from "./sync";
 import { demoKey, demoRows, readDemoBackup, writeDemoBackup } from "./demo-account";
-import { addDays, assignedDate } from "./study-model";
+import { addDays, assignedDate, isCompleted, recordKey, type Records } from "./study-model";
 
 type RoadmapRow = {
   roadmap_id: string;
@@ -133,6 +133,61 @@ export function RoadmapLibrary() {
   }
 
   useEffect(() => { void refresh().catch(error => setMessage(errorText(error))); }, [user, demo]);
+
+  useEffect(() => {
+    if (window.parent === window) return;
+    let cancelled = false;
+    const publish = async () => {
+      const activeRows = rows.filter(row => !row.archived_at);
+      const progressByRoadmap = new Map<string, Record<string, unknown>[]>();
+      if (demo) {
+        const backup = readDemoBackup();
+        backup.roadmaps.forEach(item => progressByRoadmap.set(item.roadmapId, Object.entries(recordsFromBackup(item)).map(([key, value]) => ({ key, value }))));
+      } else if (user && activeRows.length) {
+        const { data } = await supabase.from("roadmap_task_progress").select("roadmap_id,task_id,state").eq("owner_id", user.id);
+        for (const item of data ?? []) {
+          const list = progressByRoadmap.get(item.roadmap_id) ?? [];
+          list.push(item);
+          progressByRoadmap.set(item.roadmap_id, list);
+        }
+      }
+      const movesByRoadmap = new Map<string, Records>();
+      if (!demo && user && activeRows.length) {
+        const { data } = await supabase.from("roadmap_assignment_moves").select("roadmap_id,assignment_id,schedule_id,date,override_reason").eq("owner_id", user.id);
+        for (const move of data ?? []) {
+          const records = movesByRoadmap.get(move.roadmap_id) ?? {};
+          records[recordKey("assignment", move.assignment_id)] = { revision: 0, data: { scheduleId: move.schedule_id, date: move.date, overrideReason: move.override_reason } };
+          movesByRoadmap.set(move.roadmap_id, records);
+        }
+      }
+      const projected = await Promise.all(activeRows.map(async row => {
+        try {
+          const value = await getPackage(row);
+          const records: Records = { ...movesByRoadmap.get(row.roadmap_id) };
+          if (demo) for (const entry of progressByRoadmap.get(row.roadmap_id) ?? []) records[String(entry.key)] = entry.value as Records[string];
+          else for (const record of progressByRoadmap.get(row.roadmap_id) ?? []) records[recordKey("completion", String(record.task_id))] = { revision: 0, data: { state: String(record.state), completedAt: null } };
+          const schedule = value.schedules[0];
+          return {
+            id: row.roadmap_id, name: value.roadmap.title, subject: value.roadmap.subject ?? row.subject,
+            tasks: value.content.tasks.map(task => ({ id: task.taskId, label: task.title, meta: `${task.type} · ${task.minutes} min`, completed: isCompleted(records, task.taskId), date: (() => { const assignment = schedule?.assignments.find(item => item.taskId === task.taskId); return assignment ? assignedDate(schedule, assignment, records) : null; })(), searchText: [task.instructions, task.objective, ...task.criteria].join(" · ") })),
+            searchEntries: [
+              ...value.content.topics.map(topic => ({ kind: "Roadmap topic", title: topic.title, text: topic.objectives.join(" · "), view: "roadmap" })),
+              ...value.content.resources.map(resource => ({ kind: "Roadmap resource", title: resource.title, text: [resource.sourceType, resource.url, resource.reference, ...Object.values(resource.locator ?? {})].filter(Boolean).join(" · "), view: "resources" })),
+              ...value.content.milestones.map(milestone => ({ kind: "Roadmap milestone", title: milestone.title, text: milestone.criteria.join(" · "), view: "roadmap" })),
+            ],
+          };
+        } catch { return null; }
+      }));
+      if (!cancelled) parent.postMessage({ type: "semassist-roadmaps-tracks", accountId: demo ? "demo" : user?.id ?? "signed-out", tracks: projected.filter(Boolean) }, location.origin);
+    };
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin === location.origin && event.source === parent && event.data?.type === "semassist-dashboard-request-tracks") void publish();
+      if (event.origin === location.origin && event.source === parent && event.data?.type === "semassist-dashboard-open-roadmap" && typeof event.data.roadmap === "string") openStudy(event.data.roadmap, event.data.view, event.data.task);
+    };
+    window.addEventListener("message", onMessage);
+    void publish();
+    return () => { cancelled = true; window.removeEventListener("message", onMessage); };
+  }, [rows, user?.id, demo]);
 
   async function authenticate(kind: "signInWithPassword" | "signUp") {
     setBusy(true); setMessage("");
@@ -324,11 +379,14 @@ export function RoadmapLibrary() {
     window.semassistPrepareSignOut = prepare;
     return () => { delete window.semassistPrepareSignOut; };
   }, [accountId, activeRoadmap]);
-  function openStudy(id: string) {
+  function openStudy(id: string, requestedView = "overview", requestedTask = "") {
+    const view = ["overview", "roadmap", "schedule", "resources", "progress", "settings"].includes(requestedView) ? requestedView : "overview";
+    const task = typeof requestedTask === "string" && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(requestedTask) ? requestedTask : "";
     localStorage.setItem(`${demoKey}:${accountId}:active`, id);
     setActiveRoadmap(id); setStudyOpen(true);
-    history.replaceState(null, "", `#/study/${id}/overview`);
-    parent.postMessage({ type: "semassist-roadmaps-route", roadmap: id, view: "overview", task: "" }, location.origin);
+    history.replaceState(null, "", `#/study/${id}/${view}${task ? `?task=${encodeURIComponent(task)}` : ""}`);
+    window.dispatchEvent(new window.HashChangeEvent("hashchange"));
+    parent.postMessage({ type: "semassist-roadmaps-route", roadmap: id, view, task }, location.origin);
   }
   function closeStudy() {
     setStudyOpen(false);

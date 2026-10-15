@@ -1,9 +1,51 @@
 # SEMASSIST implementation checklist
 
-Last updated: 2026-10-13 (Asia/Colombo)
+Last updated: 2026-10-14 (Asia/Colombo)
+
+## Learning track management and universal search — 2026-10-14
+
+- [x] Keep learning tracks on the dashboard and add a dedicated Learning tracks page.
+- [x] Create personal tracks with optional initial topics; append checkpoints later without resetting progress.
+- [x] Upload, resize, save and remove cover images; reject unsupported or oversized files and report storage failures without discarding existing data.
+- [x] Choose from 32 licensed local Lucide icons and persist per-track sidebar visibility for built-in, personal and saved-roadmap tracks.
+- [x] Integrate personal tracks with checkpoints, progress, queue focus, review, journaling, profile badges and semester exports.
+- [x] Add universal sidebar/keyboard search for track topics, checkpoints, roadmap instructions/objectives/resources/milestones, resources, tasks and focus notes; results open the matching content.
+- [x] Verify focused upload, persistence, safe rendering, account separation and roadmap projection tests.
+- [x] Complete final regression (251/251), production build, lint (0 errors/1 existing warning), and release type checks; verify preview pages and icon module return HTTP 200.
+- [ ] Visual browser review of the new page and real image upload.
+
+Session log: features use the existing per-user dashboard state (`learningTracks` and `trackSettings`) and account sync; no new dependency, migration, or live cloud writes. New learning topics use stable append-only checkpoint IDs. Covers are converted to bounded JPEG data URLs before storage. Local Lucide icon nodes and their ISC license are bundled. Search indexes active roadmap package definitions through the trusted frame and excludes private Roadmaps learner notes; focus journal notes in the dashboard remain searchable. Account changes immediately reset drafts and block track saves while the next account loads. Full suite passed 251/251; build, lint and release types pass, and the preview serves both page URLs, updated JS and icon module. Browser inspection remains blocked by the earlier local-URL policy rejection. No commit or push. Next: user preview review, including native upload and desktop/mobile layout.
+
+## Checkpoint hover lists — 2026-10-14
+
+- [x] Open built-in and saved-roadmap checkpoint cards on mouse entry.
+- [x] Keep the list open while moving between its header and tasks, including after a completion redraw.
+- [x] Collapse on leaving the entire card/list and release lingering mouse focus; preserve touch and keyboard controls.
+- [x] Verify the interaction regression test, full suite (242/242), production build and lint (0 errors/1 existing warning).
+
+Session log: delegated mouse-pointer boundary handlers use the existing card expansion state; redraws preserve hover state. Clicking a hovered header keeps its list open. Saved progress is unchanged by hover. Visual browser review remains pending after the prior browser policy rejection. No commit/push; next: user preview review.
+
+## Dashboard cleanup and dedicated pages — 2026-10-14
+
+- [x] Replace the top-bar date with the personalized welcome and remove the duplicate welcome row.
+- [x] Compact the activity-calendar column, fill it with the monthly heatmap, and prevent the Roadmap pulse from stretching the calendar.
+- [x] Remove Resources, Roadmaps and Review from the visible main dashboard and give each a dedicated URL/view through the shared sidebar.
+- [x] Preserve saved data, old roadmap links, browser history, and dashboard shortcuts when navigating between pages.
+- [x] Verify the full test suite (241/241), production build, lint (0 errors/1 existing warning), and live HTTP 200 responses for all four page URLs.
+- [ ] Visual review of desktop/mobile layouts in the preview browser.
+
+Session log: query-based page views share the existing document and per-user data; the Roadmaps frame stays mounted for saved-track projections and account recovery. No migration or new dependency. Calendar layout also overrides the old narrow-screen five-column pulse layout. HTML CRLF preserved. Browser visual inspection remains unavailable after the prior local-URL policy block. Changes are local, uncommitted; next: user preview review.
 
 Source: [PRD v1.1](../SEMASSIST-agent-handoff/PRD.md), dated 2026-10-10.
 Status: phases 2–7 and the local phase-8 skill/release tooling are implemented. Cloud rollout, SMTP/auth, real cross-device flows, and the full assistive-technology audit remain open. Prior changes were pushed to origin/main as 1d134fb; current dashboard changes are local and uncommitted. Production deployment was not verified.
+
+## Heming font — 2026-10-13
+
+- [x] Add the supplied variable font and license-approved local font-face to the dashboard and Roadmaps.
+- [x] Apply Heming to dashboard headings, metrics and track titles, plus Roadmaps headings, topic titles, graph labels and numeric progress.
+- [x] Verify production asset output, 236 tests, lint (0 errors; 1 existing warning), and production build.
+
+The first test run exposed a missing seeded local-storage fixture in the track-selection DOM test; the test was corrected and the full suite passed. No runtime dependency was added. Changes are local and uncommitted. Next: review the updated type in the preview.
 
 ## Activity heatmap and roadmap access — 2026-10-13
 
@@ -354,3 +396,169 @@ also verified in jsdom. Full live/assistive-technology gates remain unchecked.
 | 2026-10-13 | Reverted Aminute font trial | Removed the supplied font and restored the prior heading/number styling across the dashboard and Roadmaps. | None. |
 
 | 2026-10-13 | Scannable track codes reverted | Restored the original decorative stripe barcode and removed QR assets and track-link behavior at the user's request. | None. |
+
+## Welcome and roadmap track integration — 2026-10-14
+
+- [x] Move the welcome greeting to the top of the dashboard under the toolbar.
+- [x] Show all six built-in learning tracks together, including 30 Days of Python and Algorithms.
+- [x] Project each active saved Roadmap into the Learning Tracks gallery and Study Checkpoints, with progress synced from the Roadmaps workspace.
+- [x] Add saved roadmaps to the Upcoming Checkpoints focus dropdown; selecting a checkpoint opens its roadmap.
+- [x] Verify with a saved Beginner Python roadmap in the browser and a dashboard integration test.
+- [x] Run the full suite (237/237), lint (0 errors; 1 existing warning), and production build.
+
+## Roadmaps loading with dashboard — 2026-10-14
+
+Preview recovery (2026-10-14): two stalled project Vite processes occupied port 3000. Verified their command lines, stopped only those processes, and started one hidden background Vite server outside the restricted sandbox. The actual dashboard request returned HTTP 200. Preview: `http://127.0.0.1:3000/study-dashboard.html?demo=1`. No product code changed in this recovery session; next: user refresh and visual review.
+
+- [x] Start the embedded Roadmaps workspace at the beginning of dashboard initialization so it loads alongside the dashboard and returns saved tracks sooner.
+- [x] Verify the production build, lint, and the focused local-demo/dashboard-frame test.
+- [ ] Verify the updated page visually in the browser preview.
+
+Session log (2026-10-14): the production build passed; lint has 0 errors and the existing `vite.config.ts` warning; the focused dashboard-frame test passed (1/1). Broader dashboard DOM runs stalled after Vitest startup without producing results. The local Vite preview is running at `http://127.0.0.1:3000/`; browser inspection was blocked by the computer-use URL policy. Next: review the refreshed dashboard preview and rerun the broader tests when the runner is responsive.
+
+Changes are local and uncommitted. TypeScript check remains red only in the pre-existing `client/src/**` issues listed in AGENTS.md. The preview remains open at `http://127.0.0.1:3000/study-dashboard.html?demo=1#overview`.
+
+## Dashboard section order — 2026-10-14
+
+- [x] Move Study Checkpoints above Personal Tasks on the main dashboard.
+
+Session log (2026-10-14): Reordered the two dashboard sections in the shared page layout. Confirmed the section order in source; no test run was needed for this markup-only move. No commit or push.
+
+## Projects section — 2026-10-14
+
+- [x] Add a Projects card below Personal Tasks with a sidebar link.
+- [x] Save project names/descriptions and Planned, In progress or Completed status in the existing per-user state; support deletion.
+- [x] Include projects in universal search and hide the card on dedicated workspace pages.
+- [x] Normalize imported data and prevent storage failures from discarding drafts or changing saved projects.
+- [x] Verify creation, status changes, reload, deletion, search, safe rendering and storage failure handling; full suite 253/253, build and lint pass (one existing warning).
+- [ ] Review the new card visually in the browser preview.
+
+Session log (2026-10-14): Projects reuse the current workspace cards and responsive form controls. No new database schema or dependency. Project records do not change study checkpoint totals. Account switches clear the project form; saves wait for account loading to finish. No commit or push. Next: user preview review.
+
+## Full study calendar — 2026-10-15
+
+- [x] Add a dedicated calendar page and sidebar entry while retaining the dashboard monthly activity heatmap.
+- [x] Match the paper/charcoal theme with a weekly grid, all-day row, mini month, task rail, timezone and track filters.
+- [x] Add persisted timed sessions with editing/deletion, overlap layout and account/storage safeguards.
+- [x] Display dated personal tasks and effective roadmap checkpoint dates, including saved schedule moves; link to original content.
+- [x] Include sessions in universal search, revealing the matching week.
+- [x] Build, lint and release type checks pass; live page/module/CSS respond HTTP 200.
+- [x] Run the full regression suite (255 passed) and correct the remaining calendar test selector; final calendar/library checks pass 8/8.
+- [ ] Visually review the calendar, native dialog and narrow layout in the browser.
+
+Session log (2026-10-15): Added a dedicated `?page=calendar` workspace page with seven-day time grid, all-day deadlines, mini month/week selection, previous/next/Today navigation, timezone label, track filtering and a task rail. Timed study sessions support create/edit/delete, overlap lanes, track association and notes. Normalized `calendarEvents` share per-user dashboard persistence/export/sync (500 maximum, local dates, no midnight crossing); writes preflight storage and account loading, and account changes clear drafts. Personal task due dates and effective roadmap assignment dates are displayed as all-day source entries; opening one navigates to its task. Roadmap projection includes active schedule dates and saved assignment moves without private notes. Calendar renders only when its page is visible. No new dependency or database schema. Build, lint (one existing warning), release types and HTTP page/assets checks pass; Full regression run passed 255/256 cases; the remaining failure was a search test selecting a built-in checkpoint instead of the new session. Corrected that selector; final focused calendar/library run passes 8/8, including searching from the separate Search page with an incompatible calendar filter. Browser visual review remains pending. Preview recovered as hidden Vite process 21160. No commit/push. Next: user preview review at `http://localhost:3000/study-dashboard.html?demo=1&page=calendar`.
+
+## App settings — 2026-10-15
+
+- [x] Add Settings at the bottom of the sidebar and keep it accessible on mobile.
+- [x] Add Theme, Fonts, Workspace and Saved data sections using existing management flows.
+- [x] Add system/light/dark mode, current palette preview, and placeholders for later palette choices.
+- [x] Add body/headings/numbers font controls and restore defaults using existing local families.
+- [x] Share appearance across dashboard, Calendar, Roadmaps and 404; persist device preferences without changing study data.
+- [x] Verify Settings persistence, storage sync, system theme and storage failure handling (2/2); Calendar/library regression checks 8/8; build/lint/release types and HTTP serving pass.
+- [ ] Visually review Settings and font changes across pages/mobile.
+- [ ] Add the user's additional font families when supplied.
+
+Session log (2026-10-15): Added `?page=settings` with a bottom-sidebar Settings entry (also available on mobile), Theme, Fonts, Workspace and Saved data sections. Theme mode supports system/light/dark and keeps the current paper/charcoal palette; additional palettes remain deferred until the user supplies them. Body/headings/numbers selectors use the three existing local fonts, with defaults DM Sans/Heming/Heming and a restore-defaults action. Shared `appearance.js` stores whitelisted roles in browser-wide `sem-assist-fonts`; `theme.js` exposes a preference API, handles system reset and notifies the settings form. Dashboard, Calendar, Roadmaps and 404 consume the shared font roles; same-origin frame/tab storage events update appearance. Study data remains in its existing account envelope. Management buttons reuse existing page navigation/profile/data controls. Final Settings checks pass 2/2; Calendar/library checks pass 8/8; build, lint (one existing warning), release types and HTTP Settings/assets checks pass. A fresh-state test assertion was corrected because appearance changes intentionally do not create a study-state record. Visual browser review remains pending. No commit/push. Next: user provides palette/font choices and previews Settings.
+
+## Month/week all-day calendar — 2026-10-15
+
+- [x] Add a Month view alongside Week, with month/week-aware navigation and counts.
+- [x] Remove hourly blocking and time/duration inputs; use date-based all-day sessions.
+- [x] Preserve saved records, track filters, search, source links and editing/deletion.
+- [x] Verify date boundaries, month-end navigation, legacy normalization and existing flows (11/11 focused checks); build/lint pass.
+- [ ] Review the all-day grids and narrow layout visually.
+
+Session log (2026-10-15): Calendar now has Week/Month controls and shows only all-day entries. Removed the 24-hour grid, time slots, overlap layout and session time/duration inputs. New sessions require a title/date with optional track/notes. Existing timed records retain their IDs, dates, notes and legacy numeric timing fields while rendering as all-day; edits preserve those fields. Month navigation advances to the first of the adjacent month to avoid month-end rollover, uses a Monday-aligned 42-cell grid including neighboring dates, and counts the selected month only. Track filters, search, source-task links, CRUD and storage/account safeguards remain available. Unscheduled tasks are collapsible. Focused calendar/settings/library checks pass 11/11; build and lint pass (one existing warning). HTML CRLF preserved. Visual browser review remains pending. No commit/push. Next: user preview review.
+
+## Five additional color themes — 2026-10-15
+
+- [x] Add Sage archive, Slate studio, Sand notebook, Rose ledger and Plum archive alongside Paper & charcoal.
+- [x] Add live light/dark swatch cards with persistent selection and cross-document appearance updates.
+- [x] Apply shared color roles to dashboard, Calendar, Roadmaps, sidebar and 404; retain the local dark study view.
+- [x] Verify persistence, whitelist handling and contrast for all six palettes in both modes (Settings 3/3; Calendar/library 9/9); build/lint/HTTP asset checks pass.
+- [ ] Review palette changes visually across pages/mobile.
+
+Session log (2026-10-15): Settings now offers five additional muted palettes: Sage archive, Slate studio, Sand notebook, Rose ledger and Plum archive, alongside the original Paper & charcoal. All six have light/dark variants, live swatch previews and one selected state. `appearance.js` whitelists and saves browser-wide `sem-assist-palette`, initializes color roles before paint, syncs storage events and reapplies the selected palette on theme-mode changes. Shared `palette.css` bridges the older dashboard/Roadmaps/404 tokens and sidebar colors; Roadmaps local dark study view receives the selected palette dark variant independently. Main layout/font preferences and per-user study state remain unchanged. Final Settings checks pass 3/3, including persistence, cross-document storage handling, invalid choices and text contrast (primary >=7:1, muted >=4.5:1 on paper/cards, sidebar >=4.5:1). Calendar/library checks pass 9/9. Build/lint pass (one existing warning); palette CSS returns HTTP 200. Source/HTML CRLF checks pass. Visual browser review remains pending. No commit/push. Next: user preview review; additional font choices await user input.
+
+## Progress and skill metrics — 2026-10-15
+
+- [x] Add a dedicated Progress section and management shortcut.
+- [x] Compute skill scores out of 100 from verified checkpoint coverage, with transparent formula and separate recall evidence.
+- [x] Add skill radar, segmented gauge, per-skill bars, activity bars and focus graphs using real records.
+- [x] Include built-in/custom tracks and active roadmaps; combine built-in Python paths and represent empty tracks without an invented score.
+- [x] Add 7/30/90-day graphs and live updates, plus navigation to next checkpoints.
+- [x] Verify score calculations, date series, source projection, safe labels and next-step navigation (11/11 focused checks); build/lint/live serving pass.
+- [ ] Review graph layout and interactions visually across themes/mobile.
+
+Session log (2026-10-15): Added a dedicated `?page=progress` sidebar section and Settings shortcut with reference-inspired native SVG skill radar, segmented overall progress gauge, per-skill bars, activity bars and focus area/line graph. Every skill score is rounded verified checkpoints / total * 100; built-in Python and 30 Days of Python aggregate into Python, while other personal/built-in tracks and active roadmaps remain distinct learning paths. Empty tracks show no measured score. Solid-review evidence is counted separately for completed built-in/personal checkpoints and does not inflate scores. Overall progress weights checkpoint counts and excludes personal tasks; activity charts explicitly include personal-task actions. Focus charts use dashboard timer minutes, with 7/30/90-day controls and no future/invented points. Radar shows up to eight highest-progress skills; all skills appear in the list. Next-step buttons open real checkpoints, clearing stale filters and focusing the target; roadmap tasks open their study detail. Values recompute from the existing account state/frame projection on updates and the page renders only when visible. No new persistence, dependency, cloud call or schema. Focused Progress/Settings/library checks pass 11/11; build/lint pass (one existing warning); live page/module/CSS HTTP 200; HTML CRLF preserved. Visual browser review remains pending. No commit/push. Next: user preview review.
+
+
+## Default profile name — 2026-10-15
+
+- [x] Show Sujay in the welcome greeting, profile card and share card for fresh profiles.
+- [x] Keep name editing available and prefill it with the displayed name.
+- [x] Verify dashboard profile and share-card behavior (dashboard DOM/unit checks 160/160); build passes; lint 0 errors with one existing warning.
+
+Session log (2026-10-15): Replaced the fresh-profile `[yourname]` placeholder with Sujay across the welcome, profile and share card; avatar now shows S. Existing saved names remain in effect. Dashboard DOM/unit checks pass 160/160; production build passes; lint has 0 errors and one pre-existing warning in vite.config.ts.
+
+
+## Calendar drag and drop — 2026-10-15
+
+- [x] Move sessions, personal tasks and checkpoints between dates in Week/Month views.
+- [x] Schedule from Unscheduled and drag checkpoints back to clear their calendar date.
+- [x] Persist per-user plans; retain roadmap source dates and expose a keyboard/touch date picker.
+- [x] Finish focused Calendar (6/6) and Settings (3/3) checks, production build and lint (one existing warning).
+- [ ] Review dragging and touch/date-picker interactions visually.
+
+Session log (2026-10-15): Native drag/drop now moves study sessions, personal deadlines and learning/roadmap checkpoint plans between Week/Month dates, and schedules from or returns checkpoints to Unscheduled. Highlighted targets and live save feedback use the current theme. A date-picker button provides keyboard/touch planning. Sessions retain notes/legacy fields; personal tasks update dueDate; per-user calendarTaskDates stores checkpoint calendar plans with explicit null for unscheduled, separate from original Roadmaps schedule dates shown in the picker. Local-storage/account-load guards run before applying changes; account/navigation reset clears drag state. Final Calendar checks pass 6/6 and Settings 3/3; production build passes; lint has 0 errors and its pre-existing vite.config.ts warning; HTML CRLF and diff checks pass. The first drag-back regression assertion read the old document after a simulated reload; it now uses the reloaded document and passes. Browser visual/touch review remains pending. No commit/push. Next: user tries the calendar preview.
+
+
+## Unfinished calendar carry-forward — 2026-10-15
+
+- [x] Carry unfinished dated sessions and checkpoints forward to today in Week/Month views.
+- [x] Use soft red cards with original assignment labels; exclude completed, future and unscheduled entries.
+- [x] Add session completion and midnight/return-to-tab refresh.
+- [x] Verify calendar behavior (8/8), production build, lint and HTML/diff checks.
+- [ ] Review carried cards visually across themes.
+
+Session log (2026-10-15): Unfinished dated calendar sessions, personal tasks and built-in/custom/roadmap checkpoints now display on the current local day, carrying forward through every missed day. Soft red cards include a text label and original assigned date. Completed, future and explicitly unscheduled entries do not roll. Projection recomputes from stored assignments without automatic writes or duplicates, including after reload; manual drag/date changes still persist normally. Sessions have a persisted Completed checkbox. Calendar refreshes at local midnight, focus/visibility return and existing state updates, following today when it was selected. Calendar checks pass 8/8, including leap/month boundaries, real DOM rendering, completion, next-day focus catch-up and existing drag/storage flows. Production build passes; lint has 0 errors and one existing vite.config.ts warning. HTML CRLF/diff checks pass. Visual review remains pending. No commit/push. Next: user reviews carried cards in the preview.
+
+
+## Dashboard skill profile — 2026-10-15
+
+- [x] Add the shared skill radar beside the Activity calendar and retain Roadmap pulse.
+- [x] Refresh from live checkpoint/roadmap state and link to the full Progress page.
+- [x] Verify shared scores, live updates and navigation (3/3); build/lint/HTML checks pass.
+- [ ] Review placement visually at desktop and mobile widths.
+
+Session log (2026-10-15): Added the Skill profile radar card alongside the home Activity calendar, above the existing Roadmap pulse card. The dashboard and Progress page share the same renderer and computed skill scores; account state, completion and roadmap projection updates refresh the visible graph, including navigation back to the dashboard. A View progress button opens the full report. Shared theme/font roles and the existing narrow-screen stacking are retained. Progress checks pass 3/3, including score parity, live dashboard completion updates, safe labels and full-report navigation; production build passes; lint has 0 errors and its existing warning. HTML CRLF and diff checks pass. Visual review remains pending. No commit/push. Next: user reviews the dashboard placement.
+
+
+## Compact dashboard skill chart — 2026-10-15
+
+- [x] Match the skill-profile column to the Activity calendar width and trim radar/card whitespace.
+- [x] Stack the compact cards on narrow screens.
+- [x] Verify Progress checks (3/3), build, lint and diff.
+- [ ] Review the revised size visually.
+
+Session log (2026-10-15): Constrained the home Activity calendar and skill-profile column to equal widths capped at 360px, removing the expanding white card around the radar. The dashboard radar caps at 320px with compact 16px card padding. Both cards stack at widths below 900px and shrink to fit smaller screens. Shared Progress-page chart sizing and all score behavior remain unchanged. Progress checks pass 3/3; build passes; lint has 0 errors and its existing warning; diff check passes. Visual review remains pending. No commit/push. Next: user reviews compact sizing.
+
+
+## Dashboard section alignment — 2026-10-15
+
+- [x] Place Activity calendar, Skill profile and Roadmap pulse in a shared wrapping row.
+- [x] Align section edges/gaps and pair Personal Tasks with Projects on wide screens.
+- [x] Retain compact radar, full-width Study Checkpoints and dedicated-page layouts.
+- [x] Verify Progress/Projects checks (5/5), build, lint and HTML/diff checks.
+- [ ] Review alignment visually across desktop/tablet/mobile.
+
+Session log (2026-10-15): Replaced the capped two-column activity grouping with three direct cards: Activity calendar, Skill profile and Roadmap pulse. A shared container-aware grid fills the available width: three columns at 900px, two with full-row Roadmap pulse at 600px, and one below. Radar illustration remains capped at 320px. Overview panel edges now share outer padding/gaps; inspector hugs its contents. Dashboard sections use a 12-column wrapper with consistent spacing; Study Checkpoints remains full width above Personal Tasks/Projects, which share a row above 900px with wrapping two-column forms. Dedicated pages retain their own layout. Progress/Projects checks pass 5/5, build passes, lint has 0 errors and one existing warning. Source confirms three direct activity cards; HTML CRLF and diff checks pass. Visual browser review remains pending. No commit/push. Next: user reviews dashboard wrapping and alignment.
+
+
+## Dashboard commit checkpoint — 2026-10-15
+
+- [x] Review the accumulated dashboard feature scope and existing validation.
+- [x] Package product files, shared Roadmaps integration, feature checks and task documentation.
+
+Session log (2026-10-15): Packaged the accumulated dashboard work for the requested commit: track management/universal search, Projects, Week/Month calendar with drag/drop and unfinished carry-forward, Settings with six palettes/font controls, Progress/Skills and compact aligned dashboard cards, plus shared Heming typography and Roadmaps projections. Latest build/lint checks pass (one existing lint warning); feature-focused checks are recorded above. Visual review remains pending. Unrelated client/src shell changes and local .freebuff files are excluded. User authorized the commit. Next: review the dashboard preview.
