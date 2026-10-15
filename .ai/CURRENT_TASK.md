@@ -1,5 +1,13 @@
 # Current task
 
+## Active checkpoint — login refresh and production deployment (2026-10-15)
+
+Refreshed the account entry screen with a charcoal workspace introduction, paper account form, shared Heming/DM Sans font roles, palette tokens and responsive stacking. Existing auth IDs and event handling are retained. Production alias semassist.runs-on.dev is confirmed on the linked jain-study-dashboard Vercel project; the prior deployment is an older Ready deployment. User authorized publishing the latest dashboard and login changes. Production build, source/CRLF and 27 focused auth checks pass; lint has 0 errors and its existing warning. Next: publish a clean committed snapshot, then verify production HTML/assets.
+
+## Deployment verification — production behind main (2026-10-15)
+
+Read-only production check: https://semassist.runs-on.dev is reachable over HTTPS on Vercel. Root, study-dashboard.html and study-dashboard.js return HTTP 200, but the HTML/JS differ from the local committed version. workspace-calendar.js, workspace-progress.js, workspace-progress.css and /roadmaps return HTTP 404. The production HTML lacks the latest dashboard features. GitHub Release verification succeeds for c2c644c; public commit-status list and deployments query for that SHA are empty, so there is no recorded Vercel deployment for this commit. Hosting is live, but the latest workspace changes are not deployed. No deployment or configuration changes were made. Next: inspect the Vercel project deployment connection/history and deploy the latest main commit when authorized.
+
 ## Commit checkpoint — dashboard workspace features (2026-10-15)
 
 Packaged the accumulated dashboard work for the requested commit: track management/universal search, Projects, Week/Month calendar with drag/drop and unfinished carry-forward, Settings with six palettes/font controls, Progress/Skills and compact aligned dashboard cards, plus shared Heming typography and Roadmaps projections. Latest build/lint checks pass (one existing lint warning); feature-focused checks are recorded above. Visual review remains pending. Unrelated client/src shell changes and local .freebuff files are excluded. User authorized the commit. Next: review the dashboard preview.
