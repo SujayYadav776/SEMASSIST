@@ -1,6 +1,44 @@
 # SEMASSIST implementation checklist
 
-Last updated: 2026-10-14 (Asia/Colombo)
+Last updated: 2026-10-21 (Asia/Colombo)
+
+## Checkpoint progress reset — 2026-10-21
+
+- [x] Reset completed dashboard checkpoints from 9 to 0 (0/79 verified after reload).
+- [x] Confirmed saved roadmap checkpoints were already at 0/3.
+- [x] Preserved other data; verified the activity record is empty and the existing project remains.
+- [x] Confirmed the reset persists after refresh.
+
+Session log (2026-10-21): Cleared the nine completed checkpoint flags through the dashboard; calendar activity and completion totals returned to zero. The demo reports “Saved locally” / “Progress saved in this browser”; account cloud sync requires signing in. No code changes or commit/push.
+
+Preview session (2026-10-21): Restarted the confirmed unresponsive Vite process on port 3000 as a hidden background service with file-backed output. HTTP verification returned 200 and confirmed semesterProgressList is present and Roadmap pulse is absent. Browser automation remains blocked by its URL policy; user can open the preview link manually. No commit/push.
+
+## Study inspector semester progress — 2026-10-20
+
+- [x] Remove the standalone Roadmap pulse card from the dashboard.
+- [x] Show each built-in learning track, personal track and saved roadmap in Study inspector → Semester Progress with live percentages and progress bars.
+- [x] Verify the dashboard DOM suite (100/100), full test suite (269/269), lint (0 errors; existing vite.config.ts warning), and diff whitespace check.
+
+Session log (2026-10-20): The inspector now renders progress for every current track and saved roadmap from the existing computed totals; updates follow checkpoint changes and Roadmaps projections. Removed the redundant activity card and adjusted the activity grid to two equal columns. Browser preview could not load the local server through the in-app browser, so visual review remains pending. No commit/push. Next: user reviews the dashboard.
+
+## Checkpoint pages and tagged resource cards — 2026-10-20
+
+- [x] Open built-in and personal learning checkpoints on dedicated, shareable dashboard routes.
+- [x] Turn imported Roadmaps tasks into full detail pages and keep their task-specific linked resources on the page.
+- [x] Add comma-separated checkpoint tags to saved resources and show matching cards between their checkpoint details.
+- [x] Style GitHub, roadmap.sh and video resources by provider; show official YouTube thumbnails for supported video URLs.
+- [x] Allow checkpoint completion on the detail page and refresh the matching progress views.
+- [x] Verify all tests (269/269), production build, lint (0 errors; existing vite.config.ts warning), and diff whitespace checks.
+
+Session log (2026-10-20): Added direct checkpoint routes, resource tag matching by track name/tag/checkpoint ID, provider-themed cards in the Resource Canvas and Roadmaps workspace, and YouTube thumbnails using YouTube's image host. Added that host to the dashboard, Express and Vercel image policies. Focused and full suites pass; production build passes; lint reports only the existing warning. Opened and visually reviewed the local checkpoint page; the guide card fills the available width and the direct route loads correctly. No commit/push. Note: non-YouTube links are provider-branded cards; a remote course thumbnail is shown when its source is a supported YouTube video URL.
+
+## Monthly calendar task tiles — 2026-10-20
+
+- [x] Display calendar tasks as compact, single-line tiles in Month view.
+- [x] Give task tiles varied muted light colors and preserve soft red for carried-forward tasks.
+- [x] Keep full task titles available on hover and retain the plan-date control.
+
+Session log (2026-10-20): Added month-only compact task styling with yellow, sage, blue and rose tiles, plus dark-theme variants. Overdue carry-forward tasks remain red. Opened the local preview and visually confirmed the month view. `npm test` passes 267/267; `npm run lint` passes with one existing warning in `vite.config.ts`. No commit/push.
 
 ## Learning track management and universal search — 2026-10-14
 
@@ -579,6 +617,8 @@ Session log (2026-10-15): Read-only production check: https://semassist.runs-on.
 - [x] Confirm the linked Vercel project owns semassist.runs-on.dev.
 - [x] Complete auth checks (27/27), production build and lint; publish a clean committed snapshot.
 - [x] Fix production root HTML to serve the static dashboard/account screen directly.
-- [ ] Verify public production dashboard/login and required assets.
+- [x] Verify public production root/dashboard/login and all required assets (HTTP 200; source parity).
 
 Session log (2026-10-15): Refreshed the account entry screen with a charcoal workspace introduction, paper account form, shared Heming/DM Sans font roles, palette tokens and responsive stacking. Existing auth IDs and event handling are retained. Production alias semassist.runs-on.dev is confirmed on the linked jain-study-dashboard Vercel project; the prior deployment is an older Ready deployment. User authorized publishing the latest dashboard and login changes. Production build, source/CRLF and 27 focused auth checks pass; lint has 0 errors and its existing warning. Next: publish a clean committed snapshot, then verify production HTML/assets.
+
+Deployment completion log (2026-10-15): Published clean committed source 714b12c to the linked Vercel production project. Final deployment dpl_7TaMkc6eQGKKwH5iMU63xfZQu8Uz is READY and aliased to https://semassist.runs-on.dev (inspector: https://vercel.com/xeo776-5408s-projects/jain-study-dashboard/7TaMkc6eQGKKwH5iMU63xfZQu8Uz). The first upload failed transiently; retry succeeded. Initial publish exposed root serving the Vite shell; scripts/finalize-public.mjs now copies the product HTML to index.html during builds. Final unauthenticated public HTTP checks confirm / and /study-dashboard.html match the latest HTML, including new paper/charcoal auth-shell, home skill radar and session completion control. Dashboard JS, workspace/auth/progress CSS, appearance/calendar/progress/icons modules and /roadmaps plus its JS/CSS assets all return 200; public static sources match local committed files. Focused auth checks pass 27/27; build, production route/security checks and root artifact parity pass; lint has 0 errors and the existing vite.config.ts warning. Login/signup/recovery controls retain existing IDs/behavior with shared font/palette roles and responsive layout. Live account sign-in and browser visual review were not exercised. Source commits f9d8418 and 714b12c were pushed; unrelated client/src edits remain excluded. Next: user opens production for visual review.

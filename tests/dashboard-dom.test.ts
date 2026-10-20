@@ -46,6 +46,8 @@ describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
       preSeed: { [STORAGE_KEY]: JSON.stringify({ completed: {} }) },
     });
     expect(doc.querySelectorAll(".learning-card")).toHaveLength(6);
+    expect(doc.querySelector("#activity .track-summary")).toBeNull();
+    expect(doc.querySelectorAll("#semesterProgressList .semester-track-progress")).toHaveLength(6);
     expect(doc.querySelector(".timer-card, .recent-entries, .resource-highlight")).toBeNull();
     expect(doc.querySelector("#activity .focus-panel #timerStart")).not.toBeNull();
     byId(doc, "java")!.scrollIntoView = vi.fn();
@@ -80,6 +82,7 @@ describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
     doc.querySelector<HTMLInputElement>('.task-row[data-task-id="python-1"] .check')!.click();
     expect(text(byId(doc, "sidebarCheckpoints"))).toBe("1 / 76");
     expect(text(byId(doc, "homeToday"))).toBe("1");
+    expect(doc.querySelector('[data-semester-track="python"] .semester-track-rail span')?.getAttribute("style")).toBe("width:8%");
     expect(byId(doc, "workspaceDate")).toBeNull();
     expect(doc.querySelector(".topbar #welcomeHeadline")).not.toBeNull();
     doc.querySelector<HTMLInputElement>('.task-row[data-task-id="python-1"] .check')!.click();

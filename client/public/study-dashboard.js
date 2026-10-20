@@ -1751,24 +1751,10 @@ function updateSummary(state) {
     `${stats.done} completed`;
   document.getElementById("focusCount").textContent =
     `${stats.byTrack.python.done} / ${stats.byTrack.python.total}`;
-  document
-    .querySelectorAll("[data-head-percent]")
-    .forEach(
-      node =>
-        (node.textContent =
-          stats.byTrack[node.dataset.headPercent].percent + "%")
-    );
-  const trackSummary = document.getElementById("trackSummary");
-  trackSummary.innerHTML = allLearningTracks(state)
+  document.getElementById("semesterProgressList").innerHTML = [...allLearningTracks(state), ...roadmapTracks]
     .map(track => {
       const item = stats.byTrack[track.id];
-      return (
-        `<div class="track-row" style="--track:${track.color}">` +
-        `<i></i><span>${escapeHtml(track.name)}</span>` +
-        `<strong>${item.done}/${item.total}</strong>` +
-        `<div class="mini-line"><span style="width:${item.percent}%"></span></div>` +
-        `</div>`
-      );
+      return `<div class="semester-track-progress" data-semester-track="${escapeHtml(track.id)}"><span title="${escapeHtml(track.name)}">${escapeHtml(track.name)}</span><strong>${item.percent}%</strong><div class="semester-track-rail"><span style="width:${item.percent}%"></span></div></div>`;
     })
     .join("");
   document.getElementById("customTaskCount").textContent =

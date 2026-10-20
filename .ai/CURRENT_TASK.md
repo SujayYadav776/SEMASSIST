@@ -1,8 +1,21 @@
+# Completed checkpoint — study inspector semester progress (2026-10-20)
+
+Preview follow-up (2026-10-21): Restarted the unresponsive project Vite process on port 3000 as a hidden background service. HTTP 200 confirms the updated inspector and absence of Roadmap pulse. Preview URL: http://127.0.0.1:3000/study-dashboard.html?demo=1#overview. Browser automation is blocked by its URL policy; visual review remains pending. No commit/push.
+
+Removed the standalone Roadmap pulse card from the dashboard. The Study inspector’s Semester Progress now lists each built-in learning track, personal track and saved roadmap with its live completion percentage and compact bar. Dashboard DOM suite passes 100/100; full suite passes 269/269; lint has 0 errors and the existing vite.config.ts warning; diff check passes. Browser preview was not refreshed because the in-app browser could not reach the local dev server. No commit/push. Next: user reviews the dashboard change.
+
+## Completed checkpoint — checkpoint detail pages and provider resource cards (2026-10-20)
+
+Built-in and personal learning checkpoints now have direct detail routes. Saved resources can be tagged by track, checkpoint code or checkpoint ID, and matching cards appear in the checkpoint detail. Cards identify GitHub and roadmap.sh sources; YouTube URLs use their official thumbnails. Imported Roadmaps tasks open full detail pages with task-specific resources displayed as branded cards and chips for source type, role and access status. Completion remains available on the detail page and refreshes progress. Full tests pass 269/269, build passes, and lint has 0 errors with its existing vite.config.ts warning. Opened and visually reviewed the Python checkpoint route in the local preview. No commit/push. Next: user reviews the checkpoint and Roadmaps task pages.
 # Current task
 
-## Active checkpoint — login refresh and production deployment (2026-10-15)
+## Completed checkpoint — monthly calendar task tiles (2026-10-20)
 
-Login/account layout now matches the workspace; 27 focused auth checks and production build pass, and lint reports only its existing warning. First production publish made all latest feature/login assets public (HTTP 200 and source matches), but / continued to serve the Vite shell. The production build now copies the static dashboard to dist/public/index.html so root serves the same account screen directly even when filesystem routing precedes rewrites. Artifact parity verified; publishing the root fix next.
+Monthly calendar tasks now render as compact single-line tiles with four muted light colors; unfinished carried-forward tasks retain their soft red treatment. Full task text remains available through the tile tooltip, and the plan-date control remains usable. Desktop preview visually confirms the month layout. Full test suite passes 267/267; lint passes with the existing vite.config.ts warning. No commit/push.
+
+## Completed checkpoint — login refresh and production deployment (2026-10-15)
+
+Published clean committed source 714b12c to the linked Vercel production project. Final deployment dpl_7TaMkc6eQGKKwH5iMU63xfZQu8Uz is READY and aliased to https://semassist.runs-on.dev (inspector: https://vercel.com/xeo776-5408s-projects/jain-study-dashboard/7TaMkc6eQGKKwH5iMU63xfZQu8Uz). The first upload failed transiently; retry succeeded. Initial publish exposed root serving the Vite shell; scripts/finalize-public.mjs now copies the product HTML to index.html during builds. Final unauthenticated public HTTP checks confirm / and /study-dashboard.html match the latest HTML, including new paper/charcoal auth-shell, home skill radar and session completion control. Dashboard JS, workspace/auth/progress CSS, appearance/calendar/progress/icons modules and /roadmaps plus its JS/CSS assets all return 200; public static sources match local committed files. Focused auth checks pass 27/27; build, production route/security checks and root artifact parity pass; lint has 0 errors and the existing vite.config.ts warning. Login/signup/recovery controls retain existing IDs/behavior with shared font/palette roles and responsive layout. Live account sign-in and browser visual review were not exercised. Source commits f9d8418 and 714b12c were pushed; unrelated client/src edits remain excluded. Next: user opens production for visual review.
 
 ## Deployment verification — production behind main (2026-10-15)
 
@@ -315,3 +328,6 @@ Full suite: 194/194; lint: 0 errors/1 existing warning; production build passed.
 Tests/build used a temporary process-only realpath compatibility shim for sandbox
 EPERM. No cloud writes, commit, or push. Next: live cloud deployment/isolation
 checks remain blocked as recorded above.
+# Completed checkpoint — study progress reset (2026-10-21)
+
+Reset all nine completed dashboard checkpoints. All 79 checkpoints now show 0 completed; the saved Beginner Python roadmap was already 0/3. Existing tracks and project data remain. Activity history is empty after unchecking those nine items. Verified after page refresh; demo mode reports local browser persistence. Cloud sync requires sign-in. No code changes or commit/push.

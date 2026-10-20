@@ -95,3 +95,23 @@
 .calendar-undated summary { margin:20px 0 10px; cursor:pointer; font:16px var(--app-heading-font,"Heming",sans-serif); }
 .calendar-undated summary span { display:block; margin-top:4px; font:11px var(--app-body-font,"DM Sans",sans-serif); }
 .calendar-undated summary:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+
+.calendar-month-cell .calendar-task-wrap { margin:0; }
+.calendar-month-cell .calendar-task {
+  min-height:25px; margin:0; padding:4px 27px 4px 7px; border-radius:3px;
+}
+.calendar-month-cell .calendar-task strong {
+  display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; overflow-wrap:normal;
+  font-size:11px; line-height:1.35;
+}
+.calendar-month-cell .calendar-task small { display:none; }
+.calendar-month-cell .calendar-plan-button { top:2px; right:2px; width:20px; height:20px; min-height:20px; padding:0; }
+.calendar-month-cell .calendar-day-items > .calendar-task-wrap:nth-child(4n + 1) .calendar-task { background:#f3edcf; border-color:#ded3a5; border-left-color:#b4a164; }
+.calendar-month-cell .calendar-day-items > .calendar-task-wrap:nth-child(4n + 2) .calendar-task { background:#e7f0e9; border-color:#cadccf; border-left-color:#7f9c87; }
+.calendar-month-cell .calendar-day-items > .calendar-task-wrap:nth-child(4n + 3) .calendar-task { background:#e8eef6; border-color:#ced9e8; border-left-color:#8298b4; }
+.calendar-month-cell .calendar-day-items > .calendar-task-wrap:nth-child(4n) .calendar-task { background:#f5e8e7; border-color:#e5cecb; border-left-color:#b98780; }
+.calendar-month-cell .calendar-task.calendar-carried { background:#f9e9e5; border-color:#ddb7af; border-left-color:#b77467; }
+:root[data-theme="dark"] .calendar-month-cell .calendar-day-items > .calendar-task-wrap:nth-child(4n + 1) .calendar-task { background:#48422f; border-color:#746746; border-left-color:#c3af6b; }
+:root[data-theme="dark"] .calendar-month-cell .calendar-day-items > .calendar-task-wrap:nth-child(4n + 2) .calendar-task { background:#304038; border-color:#52695b; border-left-color:#91b69c; }
+:root[data-theme="dark"] .calendar-month-cell .calendar-day-items > .calendar-task-wrap:nth-child(4n + 3) .calendar-task { background:#303b49; border-color:#53657a; border-left-color:#9ab2d1; }
+:root[data-theme="dark"] .calendar-month-cell .calendar-day-items > .calendar-task-wrap:nth-child(4n) .calendar-task { background:#493738; border-color:#795957; border-left-color:#ce9790; }
