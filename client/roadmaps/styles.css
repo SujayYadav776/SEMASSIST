@@ -106,3 +106,24 @@ button:focus-visible, .button:focus-within, input:focus-visible, select:focus-vi
 :root :is(button,input,select,textarea) { font-family:var(--app-body-font,"DM Sans",sans-serif); }
 :root body :is(h1,h2,h3,h4,h5,h6), :root body .brand, :root .study-panel > summary, :root .graph-node { font-family:var(--app-heading-font,"Heming",sans-serif); }
 :root .study-number { font-family:var(--app-number-font,"Heming",sans-serif); }
+/* Source cards carry provider identity while staying within the SEM ASSIST palette. */
+.study-resource{position:relative;overflow:hidden}
+.study-resource-brand{display:inline-flex;padding:4px 8px;margin-bottom:8px;border-radius:3px;background:var(--study-wash);font-size:11px;font-weight:700;letter-spacing:.04em}
+.study-resource-tags{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 12px}
+.study-resource-tags span{padding:3px 7px;border:1px solid var(--study-line);border-radius:3px;font-size:10px}
+.study-resource-thumbnail{display:block;width:100%;max-height:240px;aspect-ratio:16/9;object-fit:cover;margin:-18px -18px 14px;width:calc(100% + 36px)}
+.study-resource.provider-github{background:#252720;color:#f1f0e7;border-color:#34372e}
+.study-resource.provider-github .study-resource-brand{background:#393b34;color:#fff}
+.study-resource.provider-roadmap{background:#e3eee5;border-color:#96b59c;color:#243c2b}
+.study-resource.provider-roadmap .study-resource-brand{background:#cbded0;color:#243c2b}
+.study-resource.provider-youtube{background:#f3e2df;border-color:#d8aaa2}
+.study-resource.provider-youtube .study-resource-brand{background:#c43b32;color:#fff}
+.study-task-page{max-width:980px;margin:20px auto;padding:clamp(18px,4vw,40px);background:var(--study-surface);border:1px solid var(--study-line);border-radius:4px;line-height:1.65}
+.study-task-page h2{font-size:clamp(26px,4vw,42px);margin:8px 0 16px}
+.study-task-page h3{margin-top:24px}
+.study-task-page .study-heading{align-items:flex-start}
+.task-open .study-layout,.task-open .study-switcher,.task-open .sidebar-toggle{display:none}
+.task-open .study-task-page{min-height:65vh}
+.study-dark .study-task-page{color:var(--study-ink);background:var(--study-surface);border-color:var(--study-line)}
+.study-dark .study-resource.provider-github{background:#181a17}
+@media(max-width:600px){.study-resource-thumbnail{margin:-14px -14px 12px;width:calc(100% + 28px)}.study-task-page{padding:18px;margin:12px 0}}

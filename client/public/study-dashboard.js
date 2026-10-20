@@ -397,6 +397,21 @@ function openRoadmap(id, view = "overview", task = "") {
   openWorkspaceSection("roadmaps");
   frame?.contentWindow?.postMessage({ type: "semassist-dashboard-open-roadmap", roadmap: roadmapId, view, task }, window.location.origin);
 }
+function openCheckpoint(track, checkpoint) {
+  const state = loadState();
+  const found = allLearningTracks(state).find(item => item.id === track && item.tasks.some((_, index) => taskId(item, index) === checkpoint));
+  if (!found) return;
+  const url = new URL(window.location.href);
+  url.searchParams.set("page", "checkpoint");
+  url.searchParams.set("track", found.id);
+  url.searchParams.set("task", checkpoint);
+  url.searchParams.delete("roadmap"); url.searchParams.delete("view");
+  url.hash = "checkpoint";
+  window.history.pushState(null, "", url);
+  renderWorkspacePage("checkpoint");
+  renderCheckpointPage(state);
+  document.getElementById("checkpoint")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+}
 const dateKey = date => {
   const local = new Date(date);
   local.setMinutes(local.getMinutes() - local.getTimezoneOffset());
@@ -832,14 +847,14 @@ function renderTracks(state) {
     track.tasks.forEach((task, index) => {
       const id = taskId(track, index);
       const checked = Boolean(state.completed[id]);
-      const label = document.createElement("label");
+      const label = document.createElement("div");
       label.className = "task-row" + (checked ? " done" : "");
       label.dataset.taskId = id;
       label.dataset.track = track.id;
       label.innerHTML =
-        `<input class="check" type="checkbox" ${checked ? "checked" : ""} />` +
-        `<span class="task-text">${escapeHtml(task[0])}</span>` +
-        `<span class="task-meta">${escapeHtml(task[1])}</span>`;
+        `<input class="check" type="checkbox" aria-label="Mark ${escapeHtml(task[0])} complete" ${checked ? "checked" : ""} />` +
+        `<button type="button" class="task-open" data-checkpoint-open data-track-id="${escapeHtml(track.id)}" data-task-id="${escapeHtml(id)}" aria-label="Open details for ${escapeHtml(task[0])}"><span class="task-text">${escapeHtml(task[0])}</span></button>` +
+        `<span class="task-meta">${escapeHtml(task[1])}</span><span class="task-open-mark" aria-hidden="true">↗</span>`;
       label
         .querySelector(".check")
         .addEventListener("change", event =>
@@ -867,7 +882,7 @@ function renderTracks(state) {
       row.dataset.roadmapId = track.id;
       row.dataset.taskId = task.id;
       row.innerHTML = `<span class="roadmap-task-state" aria-hidden="true">${task.completed ? "✓" : "○"}</span><span class="task-text">${escapeHtml(task.label)}</span><span class="task-meta">${escapeHtml(task.meta || "Roadmap checkpoint")}</span>`;
-      row.addEventListener("click", () => openRoadmap(track.id));
+      row.addEventListener("click", () => openRoadmap(track.id, "overview", task.sourceTaskId));
       list.appendChild(row);
     });
     const open = document.createElement("button");
@@ -1772,6 +1787,7 @@ function updateSummary(state) {
   renderLearningPage(state);
   renderTrackNavigation(state);
   renderSearchResults(state);
+  if (document.body.dataset.workspacePage === "checkpoint") renderCheckpointPage(state);
 }
 // The home view is a projection of existing study data; it owns no persistence.
 function renderHomeWorkspace(state) {
@@ -2042,7 +2058,7 @@ function workspaceSearchEntries(state) {
     track.tasks.forEach(task => entries.push({ kind: "Roadmap task", title: task.label, text: `${track.name} · ${task.meta} · ${task.searchText || ""}`, roadmap: track.id, task: task.sourceTaskId }));
     for (const item of track.searchEntries || []) entries.push({ kind: item.kind, title: item.title, text: `${track.name} · ${item.text}`, roadmap: track.id, view: item.view });
   }
-  for (const resource of state.resources) entries.push({ kind: "Resource", title: resource.name, text: `${resource.description || ""} · ${resource.url || ""}`, target: "resources" });
+  for (const resource of state.resources) entries.push({ kind: "Resource", title: resource.name, text: `${resource.description || ""} · ${resource.url || ""} · ${resourceTags(resource.tags).join(" ")}`, target: "resources" });
   for (const task of state.customTasks) entries.push({ kind: "Personal task", title: task.label || task.text || task.title || "Personal task", text: `${task.due || ""} ${task.cadence || ""}`, target: "custom" });
   for (const event of state.calendarEvents) entries.push({ kind: "Study session", title: event.title, text: `${event.date} · ${event.notes}`, target: "calendar", calendarDate: event.date });
   for (const project of state.projects) entries.push({ kind: "Project", title: project.name, text: `${project.description} · ${projectStatuses[project.status]}`, target: "projects" });
@@ -2068,6 +2084,7 @@ function renderSearchResults(state = loadState()) {
     button.addEventListener("click", () => {
       if (entry.roadmap) openRoadmap(entry.roadmap, entry.view || "overview", entry.task || "");
       else {
+        if (entry.checkpoint) { openCheckpoint(entry.target, entry.checkpoint); return; }
         if (allLearningTracks(state).some(track => track.id === entry.target)) {
           activeFilter = "all";
           document.getElementById("search").value = "";
@@ -2076,11 +2093,6 @@ function renderSearchResults(state = loadState()) {
         }
         if (entry.calendarDate) workspaceCalendar?.reveal(entry.calendarDate);
         openWorkspaceSection(entry.target);
-        if (entry.checkpoint) {
-          const row = [...document.querySelectorAll("#checkpoints .task-row")].find(item => item.dataset.taskId === entry.checkpoint);
-          row?.querySelector("input")?.focus({ preventScroll: true });
-          row?.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
       }
     });
     results.appendChild(button);
@@ -2088,11 +2100,12 @@ function renderSearchResults(state = loadState()) {
 }
 let workspaceProgress = null;
 let workspaceCalendar = null;
-const workspacePages = ["resources", "roadmaps", "review", "learning", "find", "calendar", "settings", "progress"];
+const workspacePages = ["resources", "roadmaps", "review", "learning", "find", "calendar", "settings", "progress", "checkpoint"];
 function renderWorkspacePage(page) {
   const selected = workspacePages.includes(page) ? page : "overview";
   document.body.dataset.workspacePage = selected;
   if (selected === "progress" || selected === "overview") workspaceProgress?.render();
+  if (selected === "checkpoint") renderCheckpointPage(loadState());
   if (selected !== "calendar") workspaceCalendar?.close();
   else {
     workspaceCalendar?.render();
@@ -2102,7 +2115,7 @@ function renderWorkspacePage(page) {
     document.getElementById(id).hidden = selected !== "overview";
   }
   for (const id of workspacePages) document.getElementById(id).hidden = selected !== id;
-  const titles = { overview: "Semester Dashboard", resources: "Resource Canvas", roadmaps: "My Roadmaps", review: "Review Sessions", learning: "Learning Tracks", find: "Search Workspace", calendar: "Study Calendar", settings: "Settings", progress: "Progress & Skills" };
+  const titles = { overview: "Semester Dashboard", resources: "Resource Canvas", roadmaps: "My Roadmaps", review: "Review Sessions", learning: "Learning Tracks", find: "Search Workspace", calendar: "Study Calendar", settings: "Settings", progress: "Progress & Skills", checkpoint: "Study Checkpoint" };
   document.title = `SEM ASSIST — ${titles[selected]}`;
   document.querySelectorAll(".nav-button").forEach(nav => {
     const active = nav.dataset.scroll === selected;
@@ -2120,16 +2133,18 @@ function openWorkspaceSection(id) {
     if (page === "overview") url.searchParams.delete("page");
     else url.searchParams.set("page", page);
     if (page !== "roadmaps") for (const key of ["roadmap", "view", "task"]) url.searchParams.delete(key);
+    if (page !== "checkpoint") for (const key of ["track", "task"]) url.searchParams.delete(key);
     url.hash = id;
     window.history.pushState(null, "", url);
     renderWorkspacePage(page);
     if (page === "resources") renderResources(loadState());
+    if (page === "checkpoint") renderCheckpointPage(loadState());
   }
   if (section.classList.contains("track-card")) {
     section.classList.add("open");
     section.setAttribute("aria-expanded", "true");
   }
-  section.scrollIntoView({ behavior: "smooth", block: "start" });
+  section.scrollIntoView?.({ behavior: "smooth", block: "start" });
   document.querySelectorAll(".nav-button").forEach(nav => {
     const active = nav.dataset.scroll === id;
     nav.classList.toggle("active", active);
@@ -2155,6 +2170,21 @@ function validResourceUrl(value) {
   } catch {
     return null;
   }
+}
+function resourcePresentation(value) {
+  const url = validResourceUrl(value);
+  if (!url) return { provider: "link", label: "Resource", thumbnail: "" };
+  const parsed = new URL(url), host = parsed.hostname.toLowerCase();
+  if (host === "github.com" || host.endsWith(".github.com")) return { provider: "github", label: "GitHub", thumbnail: "" };
+  if (host === "roadmap.sh" || host.endsWith(".roadmap.sh")) return { provider: "roadmap", label: "roadmap.sh", thumbnail: "" };
+  if (host === "youtube.com" || host.endsWith(".youtube.com") || host === "youtu.be") {
+    const id = host === "youtu.be" ? parsed.pathname.split("/").filter(Boolean)[0] : parsed.searchParams.get("v") || parsed.pathname.match(/\/(?:shorts|embed|live)\/([^/]+)/)?.[1];
+    return { provider: "youtube", label: "YouTube", thumbnail: id && /^[\w-]{11}$/.test(id) ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : "" };
+  }
+  return { provider: "link", label: host.replace(/^www\./, ""), thumbnail: "" };
+}
+function resourceTags(value) {
+  return [...new Set((Array.isArray(value) ? value : String(value || "").split(",")).map(tag => String(tag).trim().slice(0, 32)).filter(Boolean))].slice(0, 8);
 }
 function safeColor(value) {
   return /^#[0-9a-fA-F]{6}$/.test(value || "") ? value : "#87926e";
@@ -2214,15 +2244,20 @@ function renderResources(state) {
             : 18 + Math.floor(index / 3) * 138;
           const name = escapeHtml(resource.name);
           const escapedId = escapeHtml(resource.id);
+          const presentation = resourcePresentation(url);
+          const tags = resourceTags(resource.tags);
           const descriptionHtml = resource.description
             ? `<p>${escapeHtml(resource.description)}</p>`
+            : "";
+          const thumbnailHtml = presentation.thumbnail
+            ? `<img class="resource-thumbnail" src="${escapeHtml(presentation.thumbnail)}" alt="Video thumbnail for ${name}" loading="lazy" referrerpolicy="no-referrer" />`
             : "";
           const linkHtml = url
             ? `<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">Open resource ↗</a>`
             : "<p>Link unavailable</p>";
           return (
-            `<article class="resource-item" tabindex="0" data-resource-id="${escapedId}" style="left:${x}px;top:${y}px;border-left-color:${safeColor(resource.color)}" title="Move with the arrow keys; press Enter to save the position.">` +
-            `<div><h3>${name}</h3>${descriptionHtml}${linkHtml}</div>` +
+            `<article class="resource-item provider-${presentation.provider}" tabindex="0" data-resource-id="${escapedId}" style="left:${x}px;top:${y}px;border-left-color:${safeColor(resource.color)}" title="Move with the arrow keys; press Enter to save the position.">` +
+            `<div><span class="resource-provider-label">${escapeHtml(presentation.label)}</span>${thumbnailHtml}<h3>${name}</h3>${descriptionHtml}${tags.length ? `<div class="resource-tags">${tags.map(tag => `<span>${escapeHtml(tag)}</span>`).join("")}</div>` : ""}${linkHtml}</div>` +
             `<button class="custom-delete" type="button" aria-label="Delete ${name}" title="Delete resource" data-resource-delete="${escapedId}">×</button>` +
             `</article>`
           );
@@ -2295,6 +2330,38 @@ function renderResources(state) {
       }
     })
   );
+}
+function renderCheckpointPage(state) {
+  const target = document.getElementById("checkpointDetail");
+  if (!target) return;
+  const params = new URLSearchParams(window.location.search);
+  const trackId = params.get("track") || "";
+  const checkpointId = params.get("task") || "";
+  const track = allLearningTracks(state).find(item => item.id === trackId);
+  const index = track?.tasks.findIndex((_, taskIndex) => taskId(track, taskIndex) === checkpointId) ?? -1;
+  if (!track || index < 0) {
+    target.innerHTML = '<button class="text-action" type="button" data-checkpoint-back>← All checkpoints</button><h2>Checkpoint not found</h2><p>This checkpoint may have been removed from its learning track.</p>';
+    target.querySelector("[data-checkpoint-back]")?.addEventListener("click", () => openWorkspaceSection("overview"));
+    return;
+  }
+  const task = track.tasks[index];
+  const keys = new Set([track.id, track.name, checkpointId, task[1]].map(value => String(value || "").trim().toLocaleLowerCase()).filter(Boolean));
+  const related = (state.resources || []).filter(resource => resourceTags(resource.tags).some(tag => keys.has(tag.toLocaleLowerCase())));
+  const done = Boolean(state.completed[checkpointId]);
+  const cards = related.map(resource => {
+    const url = validResourceUrl(resource.url);
+    const presentation = resourcePresentation(url);
+    const tags = resourceTags(resource.tags);
+    const thumbnail = presentation.thumbnail ? '<img class="checkpoint-resource-thumbnail" src="' + escapeHtml(presentation.thumbnail) + '" alt="Video thumbnail for ' + escapeHtml(resource.name) + '" loading="lazy" referrerpolicy="no-referrer" />' : "";
+    const link = url ? '<a class="workspace-button" href="' + escapeHtml(url) + '" target="_blank" rel="noreferrer">Open resource ↗</a>' : "<p>Link unavailable</p>";
+    return '<article class="checkpoint-resource' + (thumbnail ? ' has-thumbnail' : '') + ' provider-' + presentation.provider + '">' + thumbnail + '<div class="checkpoint-resource-copy"><span class="resource-provider-label">' + escapeHtml(presentation.label) + '</span><h3>' + escapeHtml(resource.name) + '</h3>' + (resource.description ? '<p>' + escapeHtml(resource.description) + '</p>' : "") + (tags.length ? '<div class="resource-tags">' + tags.map(tag => '<span>' + escapeHtml(tag) + '</span>').join("") + "</div>" : "") + link + "</div></article>";
+  }).join("");
+  const sourceUrl = validResourceUrl(track.source);
+  const sourcePresentation = resourcePresentation(sourceUrl);
+  const guide = sourceUrl ? '<article class="checkpoint-resource provider-' + sourcePresentation.provider + '"><div class="checkpoint-resource-copy"><span class="resource-provider-label">' + escapeHtml(sourcePresentation.label) + ' · Track guide</span><h3>' + escapeHtml(track.sourceLabel || track.name) + '</h3><p>Official learning path source for this track.</p><a class="workspace-button" href="' + escapeHtml(sourceUrl) + '" target="_blank" rel="noreferrer">Open track guide ↗</a></div></article>' : "";
+  target.innerHTML = '<button class="text-action checkpoint-back" type="button" data-checkpoint-back>← All checkpoints</button><header class="checkpoint-heading"><div><p>' + escapeHtml(track.name) + ' · ' + escapeHtml(task[1]) + '</p><h2>' + escapeHtml(task[0]) + '</h2></div><label class="checkpoint-completion"><input type="checkbox" data-checkpoint-complete ' + (done ? "checked" : "") + ' /> ' + (done ? "Completed" : "Mark complete") + '</label></header><section class="checkpoint-materials"><div class="panel-heading"><div><h3>Resources for this checkpoint</h3><p>Materials tagged with ' + escapeHtml(track.name) + ', ' + escapeHtml(task[1]) + ', or ' + escapeHtml(checkpointId) + ' appear here.</p></div><button class="text-action" type="button" data-scroll="resources">Manage resources ↗</button></div>' + guide + cards + (!related.length && !guide ? '<p class="checkpoint-resource-empty">No saved resources are tagged for this checkpoint yet. Add one in Resource Canvas and tag it with ' + escapeHtml(task[1]) + ' or ' + escapeHtml(checkpointId) + '.</p>' : "") + "</section>";
+  target.querySelector("[data-checkpoint-back]")?.addEventListener("click", () => openWorkspaceSection("overview"));
+  target.querySelector("[data-checkpoint-complete]")?.addEventListener("change", event => toggleTask(checkpointId, track.id, event.currentTarget.checked));
 }
 function formatDueDate(value) {
   const [year, month, day] = String(value).split("-").map(Number);
@@ -2646,6 +2713,7 @@ function addResource(event) {
   const description = document
     .getElementById("resourceDescription")
     .value.trim();
+  const tags = resourceTags(document.getElementById("resourceTags").value);
   const color = document.getElementById("resourceColor").value;
   if (!name || !url) {
     showToast("Add a name and a valid http(s) link.");
@@ -2658,6 +2726,7 @@ function addResource(event) {
     name,
     url,
     description,
+    tags,
     color,
     x: 18 + (index % 3) * 238,
     y: 18 + Math.floor(index / 3) * 138,
@@ -3449,6 +3518,8 @@ async function init() {
     );
   }
   document.addEventListener("click", event => {
+    const checkpoint = event.target.closest("[data-checkpoint-open]");
+    if (checkpoint) { openCheckpoint(checkpoint.dataset.trackId, checkpoint.dataset.taskId); return; }
     const customize = event.target.closest("[data-customize-track]");
     if (customize) { customizeLearningTrack(customize.dataset.customizeTrack); return; }
     const roadmap = event.target.closest("[data-roadmap-open]");
@@ -3598,6 +3669,7 @@ async function init() {
     renderMissionQueue(state);
   });
   workspaceProgress = initWorkspaceProgress({ loadState, tracks: () => allLearningTracks(loadState()), roadmaps: () => roadmapTracks, taskId, todayKey, escapeHtml, formatMinutes, openSection: (track, checkpoint) => {
+    if (allLearningTracks(loadState()).some(item => item.id === track && item.tasks.some((_, index) => taskId(item, index) === checkpoint))) { openCheckpoint(track, checkpoint); return; }
     activeFilter = "all";
     document.getElementById("search").value = "";
     document.querySelectorAll(".filter").forEach(filter => filter.classList.toggle("active", filter.dataset.filter === "all"));

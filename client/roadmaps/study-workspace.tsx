@@ -29,9 +29,25 @@ function routeFromLocation() {
   return views.includes(path as View) ? path as View : "overview";
 }
 function safeUrl(value?: string) { try { const url = new URL(value ?? ""); return ["http:", "https:"].includes(url.protocol) ? url.href : undefined; } catch { return undefined; } }
+function resourcePresentation(resource: Resource, url?: string) {
+  let host = "";
+  try { host = new URL(url ?? "").hostname.toLowerCase(); } catch { /* reference only */ }
+  const source = resource.sourceType.toLowerCase();
+  if (host === "github.com" || host.endsWith(".github.com") || source.includes("github")) return { provider: "github", label: "GitHub", thumbnail: "" };
+  if (host === "roadmap.sh" || host.endsWith(".roadmap.sh") || source.includes("roadmap")) return { provider: "roadmap", label: "roadmap.sh", thumbnail: "" };
+  if (host === "youtube.com" || host.endsWith(".youtube.com") || host === "youtu.be" || source.includes("video") || source.includes("youtube")) {
+    let id = "";
+    try { const parsed = new URL(url ?? ""); id = parsed.hostname === "youtu.be" ? parsed.pathname.split("/").filter(Boolean)[0] ?? "" : parsed.searchParams.get("v") ?? parsed.pathname.match(/\/(?:shorts|embed|live)\/([^/]+)/)?.[1] ?? ""; } catch { /* reference only */ }
+    return { provider: "youtube", label: "Video", thumbnail: /^[\w-]{11}$/.test(id) ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : "" };
+  }
+  return { provider: "link", label: resource.sourceType, thumbnail: "" };
+}
 export function ResourceLink({ resource }: { resource: Resource }) {
   const url = safeUrl(resource.url);
-  return <article className="study-resource"><h4>{resource.title}</h4><p>{resource.sourceType} · {resource.role} · {resource.accessStatus}</p>
+  const presentation = resourcePresentation(resource, url);
+  const thumbnail = presentation.thumbnail;
+  const tags = [resource.sourceType, resource.role, resource.accessStatus, resource.provenance.method];
+  return <article className={`study-resource provider-${presentation.provider}`}>{thumbnail && <img className="study-resource-thumbnail" src={thumbnail} alt={`Video thumbnail for ${resource.title}`} loading="lazy" referrerPolicy="no-referrer" />}<span className="study-resource-brand">{presentation.label}</span><h4>{resource.title}</h4><div className="study-resource-tags">{tags.map(tag => <span key={tag}>{tag}</span>)}</div>
     {resource.locator && <p>{Object.entries(resource.locator).map(([key, value]) => `${key}: ${value}`).join(" · ")}</p>}
     {resource.reference && <p className="study-text">{resource.reference}</p>}
     <p>{resource.provenance.accessed ? "Source accessed" : "Source not accessed"} · {resource.provenance.method} · confidence {Math.round(resource.provenance.confidence * 100)}%</p>
@@ -41,12 +57,10 @@ export function ResourceLink({ resource }: { resource: Resource }) {
 }
 
 export function TaskDetail({ task, value, records, sync, close }: { task: Task; value: RoadmapPackage; records: Records; sync: StudySync; close(): void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
   const draft = useTextDraft(records[recordKey("note", task.taskId)] ?? {revision:0,data:defaultLearnerFields("note")}, "text");
   const note = draft.text; const setNote = draft.setText;
   const [minutes, setMinutes] = useState("");
   const [notice, setNotice] = useState("");
-  useEffect(() => { const node = dialog.current!; if (!node.open) node.showModal(); }, []);
   const done = isCompleted(records, task.taskId);
   const completion = records[recordKey("completion", task.taskId)]?.data.completedAt;
   const logged = Object.entries(records).filter(([key, row]) => key.startsWith("study-time:") && row.data.taskId === task.taskId).reduce((sum, [, row]) => sum + Number(row.data.minutes), 0);
@@ -54,8 +68,8 @@ export function TaskDetail({ task, value, records, sync, close }: { task: Task; 
     try { await sync.enqueue(kind, kind === "study-time" ? crypto.randomUUID() : task.taskId, changes, kind === "note" ? draft.baseline.current : undefined); if (kind === "note") draft.baseline.current = optimisticRecords(sync.snapshot)[recordKey("note", task.taskId)]; setNotice(sync.error || "Saved locally; sync status is shown in the workspace."); }
     catch (error) { setNotice(error instanceof Error ? error.message : "Save failed"); }
   };
-  return <dialog ref={dialog} className="task-dialog" aria-labelledby="task-detail-title" onClose={close}>
-    <div className="study-heading"><div><p className="eyebrow">{task.type} · {task.required ? "Required" : "Optional"} · {task.minutes} min</p><h2 id="task-detail-title">{task.title}</h2></div><button className="quiet" aria-label="Close task detail" onClick={close}>Close</button></div>
+  return <section className="study-task-page" aria-labelledby="task-detail-title">
+    <div className="study-heading"><div><button className="quiet" aria-label="Back to roadmap" onClick={close}>← Back to roadmap</button><p className="eyebrow">{task.type} · {task.required ? "Required" : "Optional"} · {task.minutes} min</p><h2 id="task-detail-title">{task.title}</h2></div></div>
     <h3>Objective</h3><p className="study-text">{task.objective}</p><h3>Instructions</h3><p className="study-text">{task.instructions}</p>
     <h3>Completion criteria</h3><ul>{task.criteria.map((criterion, i) => <li key={i}>{criterion}</li>)}</ul>
     <button onClick={() => void save("completion", { state: done ? "incomplete" : "completed", completedAt: done ? null : new Date().toISOString() })}>{done ? "Reopen task" : "Mark completed"}</button>
@@ -64,7 +78,7 @@ export function TaskDetail({ task, value, records, sync, close }: { task: Task; 
     <form onSubmit={event => { event.preventDefault(); void save("study-time", { taskId: task.taskId, minutes: Number(minutes), recordedAt: new Date().toISOString() }); setMinutes(""); }}><label>Manual study time (minutes)<input type="number" min="1" max="1440" required value={minutes} onChange={event => setMinutes(event.target.value)} /></label><button className="secondary">Log time</button><p>{logged} minutes recorded</p></form>
     {notice && <p role="status">{notice}</p>}
     <h3>Resources</h3>{value.content.resources.filter(r => task.resourceIds.includes(r.resourceId)).map(resource => <ResourceLink key={resource.resourceId} resource={resource} />)}
-  </dialog>;
+  </section>;
 }
 
 export function DependencyGraph({ topics }: { topics: RoadmapPackage["content"]["topics"] }) {
@@ -220,7 +234,7 @@ export function StudyWorkspace(props: Props) {
   const showTask = (item: Task) => navigate(view, item.taskId);
   const taskList = (items: Task[]) => <ul className="study-task-list">{items.map(t => <li key={t.taskId}><button className="study-task quiet" onClick={() => showTask(t)}><span>{isCompleted(records, t.taskId) ? "✓ Completed" : "○ Open"}</span><strong>{t.title}</strong><span>{t.type} · {t.minutes} min · {t.required ? "Required" : "Optional"}</span></button></li>)}</ul>;
   const days = Array.from({ length: weekly ? 7 : 1 }, (_, i) => addDays(selectedDate, i));
-  return <section className={`study-workspace ${theme === "dark" ? "study-dark" : ""}`}>
+  return <section className={`study-workspace ${theme === "dark" ? "study-dark" : ""} ${task ? "task-open" : ""}`}>
     <header className="study-heading"><div><button className="quiet" onClick={props.onBack}>← My Roadmaps</button><h2>{value.roadmap.title}</h2><p>{value.roadmap.subject} · {value.roadmap.level}</p></div><div className="study-sync" role="status"><strong>{props.accountId === "demo" ? "Local demo · " : ""}{title(engine.status())}{engine.snapshot.outbox.length ? ` · ${engine.snapshot.outbox.length} queued` : ""}</strong><button className="secondary" onClick={() => refreshStudy.current()}>Retry / refresh</button></div></header>
     {loadError && <p className="study-warning" role="status">{loadError}</p>}{engine.error && <p className="study-warning" role="alert">{engine.error}</p>}
     {engine.snapshot.outbox.filter(p => p.status === "error").map(p => <p className="study-warning" role="alert" key={p.mutation.mutationId}>{p.error} · your edit remains queued.</p>)}

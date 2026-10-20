@@ -65,6 +65,14 @@ describe("study workflows",()=>{
     const html=renderToStaticMarkup(createElement(ResourceLink,{resource}));
     expect(html).toContain('&lt;img'); expect(html).not.toContain('href='); expect(html).toContain('Reference only');
   });
+  it("styles provider resources and derives official YouTube thumbnails",()=>{
+    const github={...value.content.resources[0],sourceType:"repository",url:"https://github.com/example/project"};
+    const roadmap={...value.content.resources[0],sourceType:"guide",url:"https://roadmap.sh/python"};
+    const video={...value.content.resources[0],sourceType:"video",url:"https://www.youtube.com/watch?v=abcdefghijk"};
+    expect(renderToStaticMarkup(createElement(ResourceLink,{resource:github}))).toContain("provider-github");
+    expect(renderToStaticMarkup(createElement(ResourceLink,{resource:roadmap}))).toContain("provider-roadmap");
+    expect(renderToStaticMarkup(createElement(ResourceLink,{resource:video}))).toContain("https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg");
+  });
   it("normalizes cloud timestamp fields to match queued baselines",async()=>{
     const records=await cloudRecords(async table=>table==='roadmap_task_progress'?[{task_id:task,state:'completed',completed_at:'2026-10-11T02:00:00+00:00',revision:2}]:[]);
     expect(records[recordKey('completion',task)].data.completedAt).toBe('2026-10-11T02:00:00.000Z');
@@ -75,17 +83,16 @@ describe("study workflows",()=>{
     expect(dependent.x).toBeGreaterThan(nodes.find(n=>n.topic.topicId===dependent.topic.prerequisiteTopicIds[0])!.x);
     expect(()=>topicGraph([{...value.content.topics[0],prerequisiteTopicIds:[crypto.randomUUID()]}])).toThrow('unresolved');
   });
-  it("keeps task detail open through StrictMode effect replay",async()=>{
+  it("renders task details as a full page with its assigned resources",async()=>{
     const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost:3000'});
     vi.stubGlobal('window',dom.window); vi.stubGlobal('document',dom.window.document); vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);
-    const nativeClose=vi.fn(function(this:HTMLDialogElement){this.removeAttribute('open');this.dispatchEvent(new dom.window.Event('close'));});
-    dom.window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};
-    dom.window.HTMLDialogElement.prototype.close=nativeClose;
     const root=createRoot(dom.window.document.getElementById('root')!); const closed=vi.fn();
     try {
       await act(async()=>root.render(createElement(StrictMode,null,createElement(TaskDetail,{task:value.content.tasks[0],value,records:{},sync:setup().engine,close:closed}))));
-      expect(dom.window.document.querySelector('dialog')!.hasAttribute('open')).toBe(true);
-      expect(nativeClose).not.toHaveBeenCalled(); expect(closed).not.toHaveBeenCalled();
+      expect(dom.window.document.querySelector('dialog')).toBeNull();
+      expect(dom.window.document.querySelector('.study-task-page h2')?.textContent).toBe(value.content.tasks[0].title);
+      expect(dom.window.document.querySelector('.study-task-page h3')?.textContent).toBe("Objective");
+      expect(closed).not.toHaveBeenCalled();
     } finally { await act(async()=>root.unmount()); vi.unstubAllGlobals(); dom.window.close(); }
   });
 });

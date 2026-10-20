@@ -13,7 +13,7 @@ const CONTENT_SECURITY_POLICY = [
   "script-src 'self' https://esm.sh",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data:",
+  "img-src 'self' data: https://i.ytimg.com",
   "connect-src 'self' https://esm.sh https://nrxbelpmydquivcphxry.supabase.co wss://nrxbelpmydquivcphxry.supabase.co ws://localhost:* ws://127.0.0.1:*",
   "object-src 'none'",
   "base-uri 'self'",

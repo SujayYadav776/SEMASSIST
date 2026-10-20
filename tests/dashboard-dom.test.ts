@@ -134,6 +134,25 @@ describe("dashboard DOM smoke test (real HTML + module, jsdom)", () => {
     for (const id of ["resources", "roadmaps", "review"]) expect(byId(doc, id)!.hidden).toBe(id !== page);
     expect(doc.querySelector(`.nav-button[data-scroll="${page}"]`)!.getAttribute("aria-current")).toBe("page");
   });
+  it("opens each learning checkpoint as a page and lists matching provider-tagged resources", async () => {
+    const { doc, win } = await bootApp({
+      url: "http://localhost:3000/study-dashboard.html?demo=1",
+      preSeed: { [STORAGE_KEY]: JSON.stringify({ completed: {}, resources: [
+        { id: "video", name: "Python video", url: "https://www.youtube.com/watch?v=abcdefghijk", tags: ["BASICS"], description: "A lesson" },
+        { id: "repo", name: "Practice repo", url: "https://github.com/example/python", tags: ["python-1"] },
+      ] }) },
+    });
+    byId(doc, "checkpoint")!.scrollIntoView = vi.fn();
+    doc.querySelector<HTMLButtonElement>('.task-open[data-task-id="python-1"]')!.click();
+    expect(new URL(win.location.href).searchParams.get("page")).toBe("checkpoint");
+    expect(doc.body.dataset.workspacePage).toBe("checkpoint");
+    expect(doc.querySelector("#checkpointDetail h2")?.textContent).toBe("Learn the basics: syntax, variables/data types, operators, type casting, strings, comments, and annotations.");
+    expect(doc.querySelector("#checkpointDetail .provider-youtube img")?.getAttribute("src")).toBe("https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg");
+    expect(doc.querySelector("#checkpointDetail .provider-github")).not.toBeNull();
+    const check = doc.querySelector<HTMLInputElement>("[data-checkpoint-complete]")!;
+    check.click();
+    expect((stored(doc)!.completed as Record<string, boolean>)["python-1"]).toBe(true);
+  });
 
   it("moves between dedicated pages and the dashboard without losing study data, including history navigation", async () => {
     const { doc, win } = await bootApp({
